@@ -3,8 +3,9 @@
 while getopts mv ARGS
     do
         case $ARGS in
-            m) git config --global --replace-all core.editor "mate -w"    ;;
-            v) git config --global --replace-all core.editor "gvim -f"    ;;
+            m) git config --global --replace-all core.editor "mate -w" ;;
+            g) git config --global --replace-all core.editor "gvim -f" ;;
+            v) git config --global --replace-all core.editor "vim"     ;;
         esac
     done
 
