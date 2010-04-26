@@ -13,17 +13,19 @@ use LWP::UserAgent;
 use Parse::CPAN::MirroredBy;
 
 my $opts = {};
-$opts->{force} = 0;
 
+$opts->{force}           = 0;
 $opts->{mirrored_by_url} = 'ftp://ftp.funet.fi/pub/languages/perl/CPAN/MIRRORED.BY';
 $opts->{mirror_file}     = '/tmp/MIRRORED.BY';
 $opts->{kml_file}        = '/tmp/MIRRORED.BY.kml';
+$opts->{schema}          = 'http://www.opengis.net/kml/2.2';
 
 GetOptions( $opts,
                     'force!',
                     'kml_file=s',
                     'mirror_file=s',
                     'mirrored_by_url=s',
+                    'schema=s',
 );
 
 fetch_mirrors_file({ mirrored_by_url => $opts->{mirrored_by_url},
@@ -35,7 +37,6 @@ my $parser = Parse::CPAN::MirroredBy->new();
 @$parse = $parser->parse_file( $opts->{mirror_file} );
 
 my $KMLOUT = IO::File->new( ">" . $opts->{kml_file} );
-my $schema = 'http://www.opengis.net/kml/2.2';
 my $writer = XML::Writer->new(
                                OUTPUT      => $KMLOUT,
                                DATA_INDENT => 4,
@@ -44,7 +45,7 @@ my $writer = XML::Writer->new(
 
 
 $writer->xmlDecl("UTF-8");
-$writer->startTag( 'kml', xmlns => $schema );
+$writer->startTag( 'kml', xmlns => $opts->{schema} );
 $writer->startTag('Document');
 
 for (@$parse) {
