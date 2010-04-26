@@ -36,15 +36,15 @@ my $parser = Parse::CPAN::MirroredBy->new();
 
 @$parse = $parser->parse_file( $opts->{mirror_file} );
 
-my $KMLOUT = IO::File->new( ">" . $opts->{kml_file} );
+my $KMLOUT = IO::File->new( '>' . $opts->{kml_file} );
 my $writer = XML::Writer->new(
                                OUTPUT      => $KMLOUT,
                                DATA_INDENT => 4,
-                               DATA_MODE   => "true"
+                               DATA_MODE   => 1
                              );
 
 
-$writer->xmlDecl("UTF-8");
+$writer->xmlDecl('UTF-8');
 $writer->startTag( 'kml', xmlns => $opts->{schema} );
 $writer->startTag('Document');
 
@@ -65,22 +65,21 @@ for (@$parse) {
     #    'dst_bandwidth' => '100Mbit'
     #  },
 
-
     $writer->startTag('Placemark');
 
     my $loc = $_->{dst_location};
 
-    $loc =~ m/^(.*?),\s+(.*?),\s+(.*?)\s+\((.*)\)/;
+    $loc =~ m/^(.*?),\s+(.*?),\s+(.*?)\s+\((.*)\)/sxm;
 
     my $city    = $1;
     my $state   = $2;
     my $country = $3;
     my $coord   = $4;
 
-    $coord =~ s/^\s+//;
-    $coord =~ s/\s+$//;
+    $coord =~ s/^\s+//sxm;
+    $coord =~ s/\s+$//sxm;
 
-    $coord =~ m/^(\S+)\s+(\S+)$/;
+    $coord =~ m/^(\S+)\s+(\S+)$/sxm;
 
     my $long = $1;
     my $lat  = $2;
@@ -127,7 +126,7 @@ sub fetch_mirrors_file {
 
         # If file is less than 3 days old, skip the fetch.
         #
-        if ( $age <= 259200 ) {
+        if ( $age <= 259_200 ) {
             print "Mirrors file is less than three days old, skipping fetch.\n";
             return;
         }
@@ -146,6 +145,8 @@ sub fetch_mirrors_file {
     print $OUT $fetched->content;
 
     $OUT->close();
+
+    return;
 
 } # }}}
 
