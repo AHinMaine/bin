@@ -9,7 +9,7 @@ while getopts mv ARGS
         esac
     done
 
-echo Verifying editor change
+# Verifying editor change
 git config --list | grep -q core.editor
 if [ $? -ne 0 ] ; then
     echo "Failed to commit editor change!"
