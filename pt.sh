@@ -1,6 +1,10 @@
 #!/bin/sh
 
-PT="`which perltidy`"
+if [ -x "/opt/local/bin/perltidy" ] ; then
+    PT=/opt/local/bin/perltidy
+else
+    PT="`which perltidy`"
+fi
 
 if [ ! -x "${PT}" ] ; then
     echo "perltidy executable not found..."
