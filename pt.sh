@@ -36,21 +36,70 @@ pbp_style() {
 
 }
 
-test_style() {
+test_style_old() {
 
     ${PT}                                               \
+        --block-brace-tightness=1                       \
+        --closing-token-indentation=0                   \
         --continuation-indentation=33                   \
+        --cuddled-else                                  \
         --indent-columns=4                              \
         --line-up-parentheses                           \
         --maximum-fields-per-table=1                    \
         --nooutdent-long-quotes                         \
         --nooutdent-labels                              \
+        --noopening-anonymous-sub-brace-on-new-line     \
         --noopening-brace-on-new-line                   \
-        --noopening-sub-brace-on-new-line               \
         --opening-brace-always-on-right                 \
+        --noopening-sub-brace-on-new-line               \
+        --nospace-for-semicolon                         \
         --standard-error-output                         \
         --standard-output                               \
+        --trim-qw                                       \
+        --vertical-tightness=1                          \
+        --vertical-tightness-closing=1                  \
         ${FILE}
+
+}
+
+test_style() {
+
+    ${PT}                                               \
+        --add-newlines                                  \
+        --blanks-before-blocks                          \
+        --blanks-before-comments                        \
+        --blanks-before-subs                            \
+        --block-brace-tightness=1                       \
+        --brace-tightness=1                             \
+        --break-at-old-logical-breakpoints              \
+        --break-at-old-keyword-breakpoints              \
+        --break-at-old-ternary-breakpoints              \
+        --closing-token-indentation=1                   \
+        --comma-arrow-breakpoints=3                     \
+        --continuation-indentation=4                    \
+        --cuddled-else                                  \
+        --indent-columns=4                              \
+        --line-up-parentheses                           \
+        --maximum-fields-per-table=1                    \
+        --maximum-line-length=${WIDTH}                  \
+        --noopening-brace-on-new-line                   \
+        --noopening-sub-brace-on-new-line               \
+        --nooutdent-labels                              \
+        --nooutdent-long-quotes                         \
+        --opening-brace-always-on-right                 \
+        --paren-tightness=1                             \
+        --square-bracket-tightness=1                    \
+        --stack-opening-tokens                          \
+        --stack-closing-tokens                          \
+        --standard-error-output                         \
+        --standard-output                               \
+        --trim-qw                                       \
+        --vertical-tightness=2                          \
+        --vertical-tightness-closing=1                  \
+        --want-break-before="."                         \
+        --want-right-space="!"                          \
+        ${FILE}
+
 
 }
 
@@ -159,8 +208,78 @@ aaron_style() {
 
 }
 
+gnu_style() {
 
-while getopts ac:qMmpwf:l:D STYLE
+    ${PT}                                               \
+        --gnu-style                                     \
+        --standard-error-output                         \
+        --standard-output                               \
+        --warning-output                                \
+        ${FILE}
+
+}
+
+show_help() {
+    
+cat <<SHOWHELP
+
+
+NAME
+
+    pt.sh
+
+DESCRIPTION
+
+    Wrapper for the perltidy program to use different styles.
+
+OPTIONS
+
+    -m
+
+        My personal style preference.  This is the default.
+
+    -p
+
+        Perl Best Practices style
+
+    -w
+
+        Whitesmith's style.  Very c-ish.
+     -g
+
+        GNU style.  Very c-ish.
+    -a
+
+        My boss' c-ish style
+
+    -t
+
+        Test style
+
+    -f <filename>
+
+        Filename of perl script to tidy up.
+
+    -c <columns> (default: 80)
+
+        Column width
+
+    -M
+
+        Max width.  Attempts to determine the actual
+        width of your screen and use that as the 
+        column width.
+
+
+
+
+SHOWHELP
+
+exit 0
+
+}
+
+while getopts ac:qMmpwtgf:l:DH STYLE
     do
         case ${STYLE} in
             f)  FILE="${OPTARG}"        ;;
@@ -171,7 +290,9 @@ while getopts ac:qMmpwf:l:D STYLE
             t)  DO="test_style"         ;;
             w)  DO="whitesmiths_style"  ;;
             a)  DO="aaron_style"        ;;
+            g)  DO="gnu_style"          ;;
             D)  DEBUG="true"            ;;
+            H)  show_help               ;;
            \?)  DO="my_style"           ;;
         esac
     done
