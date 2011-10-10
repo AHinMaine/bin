@@ -1,0 +1,609 @@
+#!/usr/bin/env perl
+
+use strict;
+use warnings;
+
+use Net::Ping;
+use Time::HiRes;
+use Data::Dumper;
+use Getopt::Long qw/:config auto_help/;
+
+use Term::ReadKey qw/ReadMode ReadKey/;
+
+my $opts = {};
+
+$opts->{count}   = 0;
+$opts->{timeout} = 1;
+$opts->{U}       = 0;
+$opts->{i}       = '';
+$opts->{type}    = 'icmp';
+$opts->{syn}     = 0;
+$opts->{icmp}    = 0;
+$opts->{debug}   = 0;
+$opts->{verbose} = 0;
+
+GetOptions( $opts,
+                    'host=s@{,}',       # Hosts to ping.  Repeatable.
+                    'files=s@{,}',      # filenames containing more hosts
+                    'count=i',          # number of pings to send
+                    'U!',               # whether unsuccessful pings count towards the avg
+                    'timeout=i',        # Timeout for pings, in seconds.
+                    'i|ip|interface=s', #
+                    'type=s',           # ping type
+                    'syn!',
+                    'imcp!',
+                    'port=s@{,}',       # Port to use for tcp syn pings.
+                    'debug!',
+                    'verbose!',
+);
+
+if ( $opts->{icmp} ) {
+    $opts->{type} = 'icmp';
+}
+
+if ( $opts->{syn} ) {
+    $opts->{type} = 'syn';
+}
+
+# ICMP requires root privs
+#
+if ( $opts->{type} eq 'icmp' && $< != 0 ) {
+    die "Must run as root to use icmp!\n";
+}
+
+# If no ports were specified, default to http
+#
+unless ( defined $opts->{port} && ref $opts->{port} ) {
+    $opts->{port} = [ 'http' ];
+}
+
+# Assume any straggling arguments are more hosts to ping
+#
+if ( @ARGV ) {
+    push @{$opts->{host}}, $_ for @ARGV;
+}
+
+# Look for more hosts to ping inside files
+#
+if ( defined $opts->{files} ) {
+    push @{$opts->{host}}, $_ for parse_hostfiles($opts->{files});
+}
+
+die "No hosts to ping!\n"
+    unless defined $opts->{host}
+        && ref $opts->{host}
+        && scalar @{ $opts->{host} };
+
+
+my $counter = 1;
+my $stats   = {};
+my $hr      = '-' x 40;
+
+
+ddump( 'opts', $opts ) if $opts->{debug};
+
+ReadMode 3;
+
+while ( scalar @{$opts->{host}} ) {
+
+    my $p = Net::Ping->new( $opts->{type}, $opts->{timeout} );
+
+    $p->hires;
+
+    if ( $opts->{i} ) {
+        $p->bind($opts->{i});
+    }
+
+    for my $cur_host ( @{$opts->{host}} ) {
+
+        next unless $cur_host;
+
+        ddump( 'cur_host', $cur_host ) if $opts->{debug};
+
+        if ( $opts->{type} eq 'syn' ) {
+
+            # {{{ syn pings
+            #
+
+            for my $cur_port ( @{$opts->{port}} ) {
+
+                ddump( 'cur_port', $cur_port ) if $opts->{debug};
+
+                if ( $cur_port =~ m/^\d+$/ ) {
+                    $p->port_number($cur_port,'tcp');
+                } else {
+                    $p->port_number(getservbyname($cur_port, 'tcp'));
+                }
+
+                ddump( 'p_after_setting_port', $p ) if $opts->{debug};
+
+                $p->ping($cur_host);
+
+                my ( $host, $rtt, $ip ) = $p->ack;
+
+                if ( $host && $rtt && $ip ) {
+
+                    ddump( 'host_after_ack', $host ) if $opts->{debug};
+                    ddump( 'rtt_after_ack',  $rtt )  if $opts->{debug};
+                    ddump( 'ip_after_ack',   $ip )   if $opts->{debug};
+
+                    # {{{ successful
+                    #
+
+                    my $ms = sprintf("%.2f", $rtt * 1000);
+
+                    push @{$stats->{$cur_host}->{$cur_port}->{successful}}, $ms;
+
+                    print sprintf( "%16s: ",    $ip )
+                        . sprintf( "%6.2fms ",  $ms )
+                        . sprintf( "pass=%-7d", $counter )
+                        ;
+
+                    print ' '
+                        . sprintf( "timeout=%-2d",  $p->{timeout} ) . ' '
+                        . sprintf( "datasize=%-4d", $p->{data_size} )
+                        . ' proto=' . $p->{proto}
+                        . ' port='  . $p->{port_num}
+                        if $opts->{verbose};
+
+
+                    print "\n";
+
+                    # }}}
+
+                } else {
+
+                    # {{{ unsuccessful
+
+                    print sprintf( "%16s: ",    $cur_host )
+                        . '    LOST '
+                        . sprintf( "pass=%-7d", $counter )
+                        ;
+
+                    print ' proto=' . $p->{proto}
+                        . '  port=' . $p->{port_num}
+                        . ' err='   . $p->nack($cur_host)
+                        if $opts->{verbose}
+                        ;
+
+                    print "\n";
+
+                    push @{$stats->{$cur_host}->{$cur_port}->{unsuccessful}}, $counter;
+        
+                    push @{$stats->{$cur_host}->{$cur_port}->{successful}}, $opts->{timeout} * 1000
+                        if $opts->{U};
+
+                    # }}}
+
+                }
+
+                ddump( 'p_after_syn', $p ) if $opts->{debug};
+
+            }
+
+            # }}}
+
+        } else {
+
+            # {{{ icmp pings
+            #
+
+            my $p = Net::Ping->new( $opts->{type}, $opts->{timeout} );
+
+            $p->hires;
+
+            if ( $opts->{i} ) {
+                $p->bind($opts->{i});
+            }
+
+            my ( $ret, $duration, $ip ) = $p->ping( $cur_host, $opts->{timeout} );
+
+            ddump( 'p', $p ) if $opts->{debug};
+
+            if ( $ret && $duration && $ip ) {
+
+                # {{{ successful
+
+                my $ms = sprintf("%.2f", $duration * 1000);
+
+                push @{$stats->{$cur_host}->{icmp}->{successful}}, $ms;
+
+                ddump( 'ret',      $ret      ) if $opts->{debug};
+                ddump( 'duration', $duration ) if $opts->{debug};
+                ddump( 'ip',       $ip       ) if $opts->{debug};
+
+                print sprintf( "%16s: ",    $ip      )
+                    . sprintf( "%6.2fms ",  $ms      )
+                    . sprintf( "pass=%-3d", $counter );
+
+                print ' '
+                    . sprintf( "timeout=%-2d ",  $p->{timeout}   )
+                    . sprintf( "datasize=%-4d ", $p->{data_size} )
+                    . 'proto=' . $p->{proto}
+                    if $opts->{verbose};
+
+                print "\n";
+
+                # }}}
+
+            } else {
+
+                # {{{ unsuccessful
+                #
+
+                print sprintf( "%16s: ", $cur_host )
+                    . ' LOST    '
+                    . sprintf( "pass=%-3d", $counter )
+                    ;
+
+
+                print "\n";
+
+
+                push @{$stats->{$cur_host}->{icmp}->{unsuccessful}}, $counter;
+    
+                push @{$stats->{$cur_host}->{icmp}->{successful}}, $opts->{timeout} * 1000
+                    if $opts->{U};
+
+                # }}}
+            }
+
+            # }}}
+
+        }
+
+    }
+    
+    sleep 1;
+
+    # {{{ key commands
+    #
+
+    my $key = ReadKey(-1);
+
+    if ( $key ) {
+
+        ddump( 'key_pressed', $key ) if $opts->{debug};
+
+        last if $key =~ m/q/i;
+
+        if ( $key eq 'v' ) {
+
+            $opts->{verbose} =
+                $opts->{verbose}
+                ? 0
+                : 1
+                ;
+
+        } elsif ( $key eq 'd' ) {
+
+            $opts->{debug} =
+                $opts->{debug}
+                ? 0
+                : 1
+                ;
+
+        } elsif ( $key eq 's' ) {
+
+            show_stats( $stats );
+
+        } elsif ( $key eq 'p' ) {
+            print "\nPAUSED - [Enter] to continue : ";
+            <STDIN>;
+            print "\n\n";
+        } else {
+            print "\n${hr}\n[q]quit,[v]erbose toggle,[p]ause,[s]tats up to now\n${hr}\n";
+        }
+
+    }
+
+    # }}}
+
+    $counter++;
+
+    last if $opts->{count} && $counter > $opts->{count};
+
+}
+
+ReadMode 0;
+
+ddump( 'stats_before_iter', $stats ) if $opts->{debug};
+
+show_stats( $stats );
+
+# {{{ show_stats
+#
+sub show_stats {
+
+    my $stats = shift;
+
+    my $report;
+    my @output;
+
+    if ( scalar keys %$stats ) {
+
+        for my $cur_host ( keys %$stats ) {
+
+            for my $cur_port ( keys %{$stats->{$cur_host}} ) {
+
+                ddump( 'stats_cur_port', $cur_port ) if $opts->{debug};
+
+                my $avg;
+                my $sum;
+                my $scount;
+
+                ddump( 'stats-cur_host-cur_port',         $stats->{$cur_host}->{$cur_port} ) if $opts->{debug};
+                ddump( 'ref stats-cur_host-cur_port', ref $stats->{$cur_host}->{$cur_port} ) if $opts->{debug};
+
+                if (    defined $stats->{$cur_host}->{$cur_port}->{successful} 
+                    &&      ref $stats->{$cur_host}->{$cur_port}->{successful} eq 'ARRAY' 
+                    && scalar @{$stats->{$cur_host}->{$cur_port}->{successful}} ) {
+
+                    $sum += $_ for @{$stats->{$cur_host}->{$cur_port}->{successful}};
+
+                    $scount = scalar @{$stats->{$cur_host}->{$cur_port}->{successful}};
+
+                    ddump( 'cur_host_sum',    $sum    ) if $opts->{debug};
+                    ddump( 'cur_host_scount', $scount ) if $opts->{debug};
+
+                    $avg =
+                        defined $sum && $sum
+                        ? sprintf( "%.2f", $sum / $scount )
+                        : 0
+                        ;
+
+                    ddump( 'cur_host_avg', $avg ) if $opts->{debug};
+
+                } else {
+                    $scount = 0;
+                }
+
+                my $ucount = 
+                         defined $stats->{$cur_host}->{$cur_port}->{unsuccessful} 
+                     &&      ref $stats->{$cur_host}->{$cur_port}->{unsuccessful} eq 'ARRAY' 
+                     && scalar @{$stats->{$cur_host}->{$cur_port}->{unsuccessful}}
+                      ? scalar @{$stats->{$cur_host}->{$cur_port}->{unsuccessful}}
+                      : 0
+                      ;
+
+                my $loss =
+                    $scount && ! $ucount
+                    ? 0
+                    : $ucount && ! $scount
+                      ? 100
+                      : $scount && $ucount
+                        ? ( $ucount / $scount ) * 100
+                        : 0
+                        ;
+
+                ddump( 'loss', $loss ) if $opts->{debug};
+
+                $report->{$cur_host}->{$cur_port}->{avg}    = $avg if $avg;
+                $report->{$cur_host}->{$cur_port}->{scount} = $scount;
+                $report->{$cur_host}->{$cur_port}->{ucount} = $ucount;
+                $report->{$cur_host}->{$cur_port}->{loss}   = $loss;
+
+            }
+
+        }
+
+        push @output, "\nPing stats:", ${hr};
+
+        ddump( 'report_before_loop', $report ) if $opts->{debug};
+
+        for my $cur_host ( sort keys %$report ) {
+
+            for my $cur_port ( sort keys %{$report->{$cur_host}} ) {
+
+                my @cur_host_stats;
+
+                push @cur_host_stats, sprintf( $cur_port eq 'icmp' ? "proto=%-5s " : "port=%-5s ", $cur_port );
+
+                if ( defined $report->{$cur_host}->{$cur_port}->{scount} ) {
+
+                    push @cur_host_stats, 
+                        sprintf( "%3d succ", $report->{$cur_host}->{$cur_port}->{scount} );
+
+                }
+
+                if ( defined $report->{$cur_host}->{$cur_port}->{ucount} ) {
+
+                    push @cur_host_stats, 
+                        sprintf( "%3d unsucc", $report->{$cur_host}->{$cur_port}->{ucount} );
+
+                }
+
+                if ( defined $report->{$cur_host}->{$cur_port}->{loss} ) {
+
+                    push @cur_host_stats, 
+                        sprintf( "%5.1f%% loss", $report->{$cur_host}->{$cur_port}->{loss})
+
+                }
+
+                if ( defined $report->{$cur_host}->{$cur_port}->{avg} 
+                          && $report->{$cur_host}->{$cur_port}->{avg} ) {
+
+                    push @cur_host_stats, 
+                        sprintf( "%6.2fms/avg", $report->{$cur_host}->{$cur_port}->{avg})
+
+                }
+
+                ddump( 'cur_host_stats', \@cur_host_stats ) if $opts->{debug};
+
+                if ( @cur_host_stats ) {
+
+                    push @output, 
+                        sprintf( "%16s: ", $cur_host )
+                        . join( ' ', @cur_host_stats );
+
+                }
+
+            }
+
+        }
+
+        push @output, $hr . "\n";
+
+        print join( "\n", @output );
+
+    }
+
+} # }}}
+
+# {{{ parse_hostfiles
+#
+sub parse_hostfiles {
+
+    my $filenames = shift;
+
+    return unless $filenames && ref $filenames && scalar @$filenames;
+
+    my @hosts;
+
+    for my $cf ( @$filenames ) {
+
+        if ( $cf && ! -f $cf ) {
+            return;
+        }
+
+        open my $cf_fh, '<', $cf
+            or die "Error reading hostnames file ($cf): $!\n\n";
+
+        for (<$cf_fh>) {
+
+            chomp;
+
+            # Ignore comments
+            #
+            s/#.*//;
+
+            # Strip leading and trailing spaces
+            #
+            s/^\s+//;
+            s/\s+$//;
+
+            # Skip the current line if the host address
+            # contains spaces or is zero length.
+            #
+            next if m/\s/;
+            next unless length $_;
+
+            print "Reading value from hostnames file: $_\n"
+                if $opts->{verbose};
+
+            push @hosts, $_;
+
+        }
+
+        close $cf_fh;
+
+    }
+
+    return @hosts;
+
+} # }}}
+
+# {{{ ddump
+#
+sub ddump {
+
+    my $label = shift;
+
+    $Data::Dumper::Varname = $label . '_';
+
+    print Dumper( @_ );
+
+    return;
+
+} # }}}
+
+__END__
+
+# {{{
+
+=pod
+
+=head1 NAME
+
+oping - Over-engineered ping...
+
+=head1 SCRIPT CATEGORIES
+
+Net::Ping
+
+=head1 README
+
+Ping many hosts.  Display both successful and unsuccessful pings with each pass.  Produce stats without exiting.  Pausable.
+
+=head1 OSNAMES
+
+Any
+
+=head1 PREREQUISITES
+
+ Term::ReadKey
+
+=head1 SYNOPSIS
+
+=head2 OPTIONS AND ARGUMENTS
+
+Press [h] during program execution for further options.
+
+=over 15
+
+=item B<--host> I<hostname>
+
+Hostnames to ping.  Repeatable.
+
+=item B<--file> I<filename>
+
+File containing hostnames.  Repeatable.
+
+=item B<--count> <num>
+
+Number of ping passes. 0 = indefinite.
+
+(default: 0)
+
+=item B<--timeout> <seconds>
+
+Ping timeout, in seconds.
+
+(default: 1)
+
+=item B<--U>
+
+Failed pings do not normally count against the average ping time for a host.  Use -U to make it affect those averages.
+
+=item B<--type> <type>
+
+Type of ping, syn or icmp.
+
+(default: icmp)
+
+Shortcuts B<--icmp> and B<--syn> allowed.
+
+=item B<--port> <name or number>
+
+TCP port to use for syn pings
+
+(default: http)
+
+=back
+
+=head2 EXAMPLES
+
+Regular icmp ping.
+
+C<sudo oping 8.8.8.8>
+
+Perform a syn ping of port 53 on several dns hosts.
+
+C<oping --type syn --port 53 8.8.8.8 8.8.4.4 4.4.2.2 65.175.128.181>
+
+=cut
+
+# }}}
+
+#  vim: set et ff=unix ft=perl sts=4 sw=4 ts=4 foldmethod=marker : 
+
