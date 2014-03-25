@@ -25,18 +25,18 @@ for ( <DATA> ) {
 
     chomp;
 
-    my ( $ipcidr, $rir ) = split /\s+/;
-    my ( $oct, undef   ) = split /\//;
+    my ($ipcidr, $rir) = split /\s+/;
+    my ($octet1) = split /\//;
 
-    my $obj = Net::Netmask->new($oct);
+    my $obj = Net::Netmask->new($octet1);
 
-       if ( $rir eq 'ARIN'    ) { $obj->storeNetblock($table->{$rir});  }
-    elsif ( $rir eq 'RIPE'    ) { $obj->storeNetblock($table->{$rir});  }
-    elsif ( $rir eq 'AFRINIC' ) { $obj->storeNetblock($table->{$rir});  }
-    elsif ( $rir eq 'APNIC'   ) { $obj->storeNetblock($table->{$rir});  }
-    elsif ( $rir eq 'LACNIC'  ) { $obj->storeNetblock($table->{$rir});  }
-    elsif ( $rir eq 'OTHER'   ) { $obj->storeNetblock($table->{$rir});  }
-     else { warn "Error, bad nic: ${rir}\n"; }
+    unless ( $rir ~~ [qw/ARIN RIPE AFRINIC APNIC LACNIC OTHER/] ) {
+        warn "Error, bad nic: ${rir}\n"; 
+        sleep 1;
+        next;
+    }
+
+    $obj->storeNetblock($table->{$rir});
 
 }
 
