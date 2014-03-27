@@ -6,68 +6,84 @@
 # of it sufficient to possibly use in an antispam fashion.
 # 
 
+use 5.10.0;
+
 use strict;
 use warnings;
 
-use Net::Netmask;
+use NetAddr::IP qw/Compact/;
+use Data::Dumper::Names;
 
-my $table = {};
 
-$table->{ARIN}    = {};
-$table->{RIPE}    = {};
-$table->{APNIC}   = {};
-$table->{AFRINIC} = {};
-$table->{LACNIC}  = {};
-$table->{OTHER}   = {};
+my @RIRs = qw[
+    ARIN
+    RIPE
+    APNIC
+    AFRINIC
+    LACNIC
+    OTHER
+    ];
 
+my $table  = {};
+my $lists  = {};
 
 for ( <DATA> ) {
 
     chomp;
 
-    my ($ipcidr, $rir) = split /\s+/;
-    my ($octet1) = split /\//;
+    my ( $ipcidr, $rir ) = split /\s+/;
 
-    my $obj = Net::Netmask->new($octet1);
-
-    unless ( $rir ~~ [qw/ARIN RIPE AFRINIC APNIC LACNIC OTHER/] ) {
-        warn "Error, bad nic: ${rir}\n"; 
+    unless ( $rir ~~ @RIRs ) {
+        warn "Error, bad rir: ${rir}\n";
         sleep 1;
         next;
     }
 
-    $obj->storeNetblock($table->{$rir});
+    my $ip = NetAddr::IP->new($ipcidr);
+
+    $table->{$rir}->{$ipcidr} = $ip;
 
 }
 
-for my $currir ( keys %$table ) {
 
-    print "<RIR>\n  NAME ${currir}\n";
+for my $curnic ( keys %$table ) {
 
     # Schwartzian Transform FTW!
     #
-    print map { "  NETWORK $_->[1] \n" }
-         sort { $a->[0] cmp $b->[0]    }
-          map { $_->desc =~ m%^.*/(\d+)%; [ $1, $_->desc ] } collapser($table->{$currir});
+    push @{ $lists->{$curnic} }, $_ for 
+        map  { "${curnic} $_->[1]" }
+        sort { $a->[0] <=> $b->[0] }
+        map  {
+                my $string =
+                      $_->version == 6
+                    ? $_->short . '/' . $_->masklen
+                    : $_->cidr;
+                [ $_->masklen, $string ];
 
-    print "</RIR>\n";
-
+             } collapser( $table->{$curnic} );
 
 }
 
 
-sub collapser
-{
+for my $currir ( sort keys %$lists ) {
+    print "$_\n" for @{ $lists->{$currir} };
+}
 
-    my $tab = shift;
 
-    # Pull the objects in the $table hashref into an array
-    #
-    my @blocks = dumpNetworkTable($tab);
+sub collapser {
 
-    # Take the array of netblock objects and consolidate them.
-    #
-    my @collapsed = cidrs2cidrs(@blocks);
+    my $tab    = shift;
+    my @blocks = keys %$tab;
+
+    my @objs;
+
+    for (@blocks) {
+        my $curobj = $tab->{$_};
+        push @objs, $curobj;
+
+    }
+
+    my @collapsed = Compact(@objs);
 
     return wantarray ? @collapsed : \@collapsed;
 
@@ -296,3 +312,46 @@ __DATA__
 221/8  APNIC
 222/8  APNIC
 223/8  APNIC
+2001:0000::/23  OTHER
+2001:0200::/23  APNIC
+2001:0400::/23  ARIN
+2001:0600::/23  RIPE
+2001:0800::/23  RIPE
+2001:0a00::/23  RIPE
+2001:0c00::/23  APNIC
+2001:0e00::/23  APNIC
+2001:1200::/23  LACNIC
+2001:1400::/23  RIPE
+2001:1600::/23  RIPE
+2001:1800::/23  ARIN
+2001:1a00::/23  RIPE
+2001:1c00::/22  RIPE
+2001:2000::/20  RIPE
+2001:3000::/21  RIPE
+2001:3800::/22  RIPE
+2001:3c00::/22  OTHER
+2001:4000::/23  RIPE
+2001:4200::/23  AFRINIC
+2001:4400::/23  APNIC
+2001:4600::/23  RIPE
+2001:4800::/23  ARIN
+2001:4a00::/23  RIPE
+2001:4c00::/23  RIPE
+2001:5000::/20  RIPE
+2001:8000::/19  APNIC
+2001:a000::/20  APNIC
+2001:b000::/20  APNIC
+2002:0000::/16  OTHER
+2003:0000::/18  RIPE
+2400:0000::/12  APNIC
+2600:0000::/12  ARIN
+2610:0000::/23  ARIN
+2620:0000::/23  ARIN
+2800:0000::/12  LACNIC
+2a00:0000::/12  RIPE
+2c00:0000::/12  AFRINIC
+2d00:0000::/8   OTHER
+2e00:0000::/7   OTHER
+3000:0000::/4   OTHER
+3ffe::/16   OTHER
+5f00::/8    OTHER
