@@ -108,6 +108,15 @@
 #       geeklet 2:    text-time.sh -t minute_tens -u  # FIFTY
 #       geeklet 3:    text-time.sh -t minute_ones -l  # nine
 #   
+#
+#       If CPU/battery consumption is too excessive, instead use cron jobs to
+#       update the time images:
+#
+#           * */1 * * *   /perl/bin/text-time.sh -R 0 -B -H -l -t hour
+#           * * * * *     /perl/bin/text-time.sh -R 0 -B -H -l -t minute_ones
+#           * * * * *     /perl/bin/text-time.sh -R 0 -B -H -C lightblue -S 64 -u -t minute_tens
+#           0 0,12 * * *  /perl/bin/text-time.sh -R 270 -B -H -C gray -t ampm_long
+# 
 
 _DEF_FONT=Courier
 _DEF_FONTSIZE=48
@@ -186,34 +195,49 @@ get_tzoffset() {
 
 get_minutes() {
 
+    _hour=$(date +'%H')
     _minutes=$(date +'%M')
 
-    case $_minutes in
-        00) _m="O'Clock"   ; _s=""   ;;
-        01) _m="O'One"     ; _s=""   ;;
-        02) _m="O'Two"     ; _s=""   ;;
-        03) _m="O'Three"   ; _s=""   ;;
-        04) _m="O'Four"    ; _s=""   ;;
-        05) _m="O'Five"    ; _s=""   ;;
-        06) _m="O'Six"     ; _s=""   ;;
-        07) _m="O'Seven"   ; _s=""   ;;
-        08) _m="O'Eight"   ; _s=""   ;;
-        09) _m="O'Nine"    ; _s=""   ;;
-        10) _m="Ten"       ; _s=""   ;;
-        11) _m="Eleven"    ; _s=""   ;;
-        12) _m="Twelve"    ; _s=""   ;;
-        13) _m="Thirteen"  ; _s=""   ;;
-        14) _m="Fourteen"  ; _s=""   ;;
-        15) _m="Fifteen"   ; _s=""   ;;
-        16) _m="Sixteen"   ; _s=""   ;;
-        17) _m="Seventeen" ; _s=""   ;;
-        18) _m="Eighteen"  ; _s=""   ;;
-        19) _m="Nineteen"  ; _s=""   ;;
-        20) _m="Twenty"    ; _s=""   ;;
-        30) _m="Thirty"    ; _s=""   ;;
-        40) _m="Fourty"    ; _s=""   ;;
-        50) _m="Fifty"     ; _s=""   ;;
-    esac
+    if [ "${_hour}" = "00" -a "${_minutes}" = "00" ] ; then
+
+        _m="Midnight"
+        _s=""
+
+    elif [ "${_hour}" = "12" -a "${_minutes}" = "00" ] ; then
+
+        _m="Noon"
+        _s=""
+
+    else
+
+        case $_minutes in
+            00) _m="O'Clock"   ; _s=""   ;;
+            01) _m="O'One"     ; _s=""   ;;
+            02) _m="O'Two"     ; _s=""   ;;
+            03) _m="O'Three"   ; _s=""   ;;
+            04) _m="O'Four"    ; _s=""   ;;
+            05) _m="O'Five"    ; _s=""   ;;
+            06) _m="O'Six"     ; _s=""   ;;
+            07) _m="O'Seven"   ; _s=""   ;;
+            08) _m="O'Eight"   ; _s=""   ;;
+            09) _m="O'Nine"    ; _s=""   ;;
+            10) _m="Ten"       ; _s=""   ;;
+            11) _m="Eleven"    ; _s=""   ;;
+            12) _m="Twelve"    ; _s=""   ;;
+            13) _m="Thirteen"  ; _s=""   ;;
+            14) _m="Fourteen"  ; _s=""   ;;
+            15) _m="Fifteen"   ; _s=""   ;;
+            16) _m="Sixteen"   ; _s=""   ;;
+            17) _m="Seventeen" ; _s=""   ;;
+            18) _m="Eighteen"  ; _s=""   ;;
+            19) _m="Nineteen"  ; _s=""   ;;
+            20) _m="Twenty"    ; _s=""   ;;
+            30) _m="Thirty"    ; _s=""   ;;
+            40) _m="Fourty"    ; _s=""   ;;
+            50) _m="Fifty"     ; _s=""   ;;
+        esac
+
+    fi
 
     if [ -z "${_m}" ] ; then
 
