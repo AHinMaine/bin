@@ -60,6 +60,37 @@
 #       the strftime(3) manpage.  This option is mutually
 #       exclusive with the -t option.
 #
+#   -R <degrees>
+#
+#       Rotate the image the specified number of degrees.
+#       The resulting image will be written to:
+#       ${HOME}/text-time-${_TOKEN}.png
+#
+#       If no rotation is specified, output will be in plain
+#       text and can be formatted accordingly.  If rotation
+#       is specified, even 0, then the output will be a full
+#       image and is subject to ImageMagick formatting with
+#       the convert command.
+#
+#   -F <fontname>
+#
+#       Name of font to use for image output
+#
+#   -S <pointsize>
+#
+#       Size of font to use for image output
+#
+#   -C <color>
+#
+#       Color of font to use for image output
+#
+#   -B
+#
+#       Bold font
+#
+#   -H
+#       Font shadow
+#
 # USAGE
 # 
 #       Take a look at the Minimalist Text screenshots:
@@ -78,6 +109,10 @@
 #       geeklet 3:    text-time.sh -t minute_ones -l  # nine
 #   
 
+_DEF_FONT=Courier
+_DEF_FONTSIZE=48
+_DEF_FONTCOLOR=white
+_DEF_FONTWEIGHT=Normal
 
 show_help() {
 
@@ -97,11 +132,17 @@ show_help() {
 show() {
 
     if [ -n "${_UPPER}" ] ; then
-        echo ${1^^}
+        _OUT=${1^^}
     elif [ -n "${_LOWER}" ] ; then
-        echo ${1,,}
+        _OUT=${1,,}
     else
-        echo $1
+        _OUT=${1}
+    fi
+
+    if [ -n "${_ROTATE}" -a -n "${_TOKEN}" ] ; then
+        echo ${_OUT} | /usr/local/bin/convert -background none -fill ${_FONTCOLOR} -font "${_FONT}${_FONTBOLD:+-Bold}" -pointsize ${_FONTSIZE} -antialias label:@- ${_FONTSHADOW:+\( +clone -shadow 70x4+5+5 \) +swap +flatten} -rotate ${_ROTATE} -trim ${HOME}/text-time-${_TOKEN}.png
+    else
+        echo ${_OUT}
     fi
 
 }
@@ -125,7 +166,7 @@ get_ampm_long() {
         \*) _p="${_ampm}"       ;;
     esac
 
-    show $_p
+    show "$_p"
 
 }
 
@@ -245,18 +286,19 @@ get_hour() {
         07) _h="Seven"  ;;
         08) _h="Eight"  ;;
         09) _h="Nine"   ;;
+        10) _h="Ten"    ;;
         11) _h="Eleven" ;;
         12) _h="Twelve" ;;
     esac
 
-    echo $_h
+    show $_h
 
 }
 
 
 
 get_day() {
-    echo $(date +'%d')
+    show $(date +'%d')
 }
 
 get_day_name() {
@@ -276,7 +318,7 @@ get_month() {
 
     #     %d    is replaced by the day of the month as a decimal number (01-31).
     #     %e    is replaced by the day of the month as a decimal number (1-31); single digits are preceded by a blank.
-    echo $(date +'%d')
+    show $(date +'%d')
 
 }
 
@@ -298,20 +340,29 @@ get_month_name_full() {
 get_year() {
 
     # %Y - Year
-    echo $(date +'%Y')
+    show $(date +'%Y')
 
 }
 
 
-while getopts ulhf:t: ARGS
+while getopts ulhf:t:R:F:S:C:BH ARGS
     do
         case $ARGS in
-            u)  _UPPER="TRUE"                ;;
-            l)  _LOWER="TRUE"                ;;
-            f)  _FORMAT="${OPTARG}"          ;;
-            t)  _TOKEN="${OPTARG}"           ;;
-            h)  show_help && exit 0          ;;
-           \?)  show_help && exit 1          ;;
+            u)  _UPPER="TRUE"                           ;;
+            l)  _LOWER="TRUE"                           ;;
+            f)  _FORMAT="${OPTARG}"                     ;;
+            t)  _TOKEN="${_TOKEN}${_TOKEN:+ }${OPTARG}" ;;
+
+            # ImageMagick related options
+            R)  _ROTATE="${OPTARG}"                     ;;
+            F)  _FONT="${OPTARG}"                       ;;
+            S)  _FONTSIZE="${OPTARG}"                   ;;
+            C)  _FONTCOLOR="${OPTARG}"                  ;;
+            B)  _FONTBOLD="TRUE"                        ;;
+            H)  _FONTSHADOW="TRUE"                      ;;
+
+            h)  show_help && exit 0                     ;;
+           \?)  show_help && exit 1                     ;;
         esac
     done ; shift `expr ${OPTIND} - 1`
 
@@ -319,6 +370,19 @@ while getopts ulhf:t: ARGS
 if [ -z "${_TOKEN}" -a -z "${_FORMAT}" ] ; then
     echo "No token -t or format -f option specified"
     show_help
+fi
+
+if [ -n "${_ROTATE}" ] ; then
+
+    if [ ! -x "/usr/local/bin/convert" ] ; then
+        echo "ImageMagic not installed. Aborting."
+        exit 1
+    fi
+
+    [ -z "${_FONT}"       ] && _FONT=$_DEF_FONT
+    [ -z "${_FONTSIZE}"   ] && _FONTSIZE=$_DEF_FONTSIZE
+    [ -z "${_FONTCOLOR}"  ] && _FONTCOLOR=$_DEF_FONTCOLOR
+
 fi
 
 if [ -n "${_TOKEN}" ] ; then
