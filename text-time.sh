@@ -60,6 +60,37 @@
 #       the strftime(3) manpage.  This option is mutually
 #       exclusive with the -t option.
 #
+#   -R <degrees>
+#
+#       Rotate the image the specified number of degrees.
+#       The resulting image will be written to:
+#       ${HOME}/text-time-${_TOKEN}.png
+#
+#       If no rotation is specified, output will be in plain
+#       text and can be formatted accordingly.  If rotation
+#       is specified, even 0, then the output will be a full
+#       image and is subject to ImageMagick formatting with
+#       the convert command.
+#
+#   -F <fontname>
+#
+#       Name of font to use for image output.  To see the fonts
+#       supported by your ImageMagick installation, run:
+#
+#           convert -list font
+#
+#   -S <pointsize>
+#
+#       Size of font to use for image output
+#
+#   -C <color>
+#
+#       Color of font to use for image output.
+#       (http://www.imagemagick.org/script/color.php)
+#
+#   -H
+#       Font shadow
+#
 # USAGE
 # 
 #       Take a look at the Minimalist Text screenshots:
@@ -77,7 +108,25 @@
 #       geeklet 2:    text-time.sh -t minute_tens -u  # FIFTY
 #       geeklet 3:    text-time.sh -t minute_ones -l  # nine
 #   
+#
+#       If CPU/battery consumption is too excessive, instead use cron jobs to
+#       update the time images:
+#
+#           * */1 * * *   text-time.sh -R 0   -H                          -l -t hour            2>/dev/null
+#           * * * * *     text-time.sh -R 0   -H                          -l -t minute_ones     2>/dev/null
+#           * * * * *     text-time.sh -R 0   -H -C lightblue -S 64       -u -t minute_tens     2>/dev/null
+#           0 0,12 * * *  text-time.sh -R 270 -H -C lightgray                -t ampm_long       2>/dev/null
+#           0 0 1 * *     text-time.sh -R 90  -H                          -u -t month_name      2>/dev/null
+#           0 0 * * *     text-time.sh -R 0   -H -C lightblue -S 98 -K -5 -u -t day             2>/dev/null
+#           0 0 * * *     text-time.sh -R 0   -H -C lightgray -S 36       -u -t day_name_full   2>/dev/null
 
+
+_DEF_FONT=Courier-Bold
+_DEF_FONTSIZE=48
+_DEF_FONTKERN=1
+_DEF_FONTCOLOR=white
+_DEF_FONTWEIGHT=Normal
+_DEF_OUTPUT=/var/tmp/`whoami`/text-time
 
 show_help() {
 
@@ -96,27 +145,56 @@ show_help() {
 
 show() {
 
+    _TEXT="${_OVERRIDE:-$1}"
+
     if [ -n "${_UPPER}" ] ; then
-        echo ${1^^}
+        _OUT="${_TEXT^^}"
     elif [ -n "${_LOWER}" ] ; then
-        echo ${1,,}
+        _OUT="${_TEXT,,}"
     else
-        echo $1
+        _OUT="${_TEXT}"
+    fi
+
+    if [ -n "${_ROTATE}" -a -n "${_TOKEN}" ] ; then
+
+        [ -n "${VERBOSE}" ] && set -x
+
+        echo "${_OUT}" | \
+            /usr/local/bin/convert \
+                -background none \
+                -fill ${_FONTCOLOR} \
+                -font "${_FONT}" \
+                -kerning ${_FONTKERN} \
+                -gravity South \
+                -pointsize ${_FONTSIZE} \
+                -antialias label:@- ${_FONTSHADOW:+\( +clone -shadow 70x5+5+5 \) +swap +flatten} \
+                -rotate ${_ROTATE} \
+                -trim ${_DEF_OUTPUT}/text-time-${_TOKEN}.png
+
+        [ -n "${VERBOSE}" ] && set +x
+
+    else
+        echo "${_OUT}"
     fi
 
 }
 
 get_ampm() {
 
-    #     %p    is replaced by national representation of either "ante meridiem" (a.m.)  or "post meridiem" (p.m.)  as appropriate.
+    if [ -n "${_T24}" ] ; then
+        show " "
+    fi
+
     show $(date +'%p')
 
 }
 
-
 get_ampm_long() {
 
-    #     %p    is replaced by national representation of either "ante meridiem" (a.m.)  or "post meridiem" (p.m.)  as appropriate.
+    if [ -n "${_T24}" ] ; then
+        show " "
+    fi
+
     _ampm=$(date +'%p')
 
     case $_ampm in
@@ -125,85 +203,92 @@ get_ampm_long() {
         \*) _p="${_ampm}"       ;;
     esac
 
-    show $_p
+    show "$_p"
 
 }
 
-get_tzname() {
-
-    #     %Z    is replaced by the time zone name.
-    show $(date +'%Z')
-
-}
-
-get_tzoffset() {
-
-    #     %z    is replaced by the time zone offset from UTC; a leading plus sign stands for east of UTC, a minus sign for west of UTC, hours and minutes follow with two digits each and no
-    show $(date +'%z')
-
-}
 
 get_minutes() {
 
+    _hour=$(date +'%H')
     _minutes=$(date +'%M')
 
-    case $_minutes in
-        00) _m="O'Clock"   ; _s=""   ;;
-        01) _m="O'One"     ; _s=""   ;;
-        02) _m="O'Two"     ; _s=""   ;;
-        03) _m="O'Three"   ; _s=""   ;;
-        04) _m="O'Four"    ; _s=""   ;;
-        05) _m="O'Five"    ; _s=""   ;;
-        06) _m="O'Six"     ; _s=""   ;;
-        07) _m="O'Seven"   ; _s=""   ;;
-        08) _m="O'Eight"   ; _s=""   ;;
-        09) _m="O'Nine"    ; _s=""   ;;
-        10) _m="Ten"       ; _s=""   ;;
-        11) _m="Eleven"    ; _s=""   ;;
-        12) _m="Twelve"    ; _s=""   ;;
-        13) _m="Thirteen"  ; _s=""   ;;
-        14) _m="Fourteen"  ; _s=""   ;;
-        15) _m="Fifteen"   ; _s=""   ;;
-        16) _m="Sixteen"   ; _s=""   ;;
-        17) _m="Seventeen" ; _s=""   ;;
-        18) _m="Eighteen"  ; _s=""   ;;
-        19) _m="Nineteen"  ; _s=""   ;;
-        20) _m="Twenty"    ; _s=""   ;;
-        30) _m="Thirty"    ; _s=""   ;;
-        40) _m="Fourty"    ; _s=""   ;;
-        50) _m="Fifty"     ; _s=""   ;;
-    esac
+    if [ "${_hour}" = "00" -a "${_minutes}" = "00" ] ; then
 
-    if [ -z "${_m}" ] ; then
+        if [ -n "${_T24}" ] ; then
+            _M="Hundred"
+            _m=""
+        else
+            _M="Midnight"
+            _m=""
+        fi
+
+    elif [ "${_hour}" = "12" -a "${_minutes}" = "00" ] ; then
+
+        _M="Noon"
+        _m=""
+
+    else
+
+        case $_minutes in
+            00) _M="O'Clock"   ; _m=""   ;;
+            01) _M="O'One"     ; _m=""   ;;
+            02) _M="O'Two"     ; _m=""   ;;
+            03) _M="O'Three"   ; _m=""   ;;
+            04) _M="O'Four"    ; _m=""   ;;
+            05) _M="O'Five"    ; _m=""   ;;
+            06) _M="O'Six"     ; _m=""   ;;
+            07) _M="O'Seven"   ; _m=""   ;;
+            08) _M="O'Eight"   ; _m=""   ;;
+            09) _M="O'Nine"    ; _m=""   ;;
+            10) _M="Ten"       ; _m=""   ;;
+            11) _M="Eleven"    ; _m=""   ;;
+            12) _M="Twelve"    ; _m=""   ;;
+            13) _M="Thirteen"  ; _m=""   ;;
+            14) _M="Fourteen"  ; _m=""   ;;
+            15) _M="Fifteen"   ; _m=""   ;;
+            16) _M="Sixteen"   ; _m=""   ;;
+            17) _M="Seventeen" ; _m=""   ;;
+            18) _M="Eighteen"  ; _m=""   ;;
+            19) _M="Nineteen"  ; _m=""   ;;
+            20) _M="Twenty"    ; _m=""   ;;
+            30) _M="Thirty"    ; _m=""   ;;
+            40) _M="Fourty"    ; _m=""   ;;
+            50) _M="Fifty"     ; _m=""   ;;
+        esac
+
+    fi
+
+    if [ -z "${_M}" ] ; then
 
         _tens=$(echo $_minutes | cut -c1)
         _ones=$(echo $_minutes | cut -c2)
 
         case $_tens in
-            2) _m="Twenty"  ;;
-            3) _m="Thirty"  ;;
-            4) _m="Fourty"  ;;
-            5) _m="Fifty"   ;;
+            2) _M="Twenty"  ;;
+            3) _M="Thirty"  ;;
+            4) _M="Fourty"  ;;
+            5) _M="Fifty"   ;;
         esac
 
         case $_ones in
-            1) _s="One"     ;;
-            2) _s="Two"     ;;
-            3) _s="Three"   ;;
-            4) _s="Four"    ;;
-            5) _s="Five"    ;;
-            6) _s="Six"     ;;
-            7) _s="Seven"   ;;
-            8) _s="Eight"   ;;
-            9) _s="Nine"    ;;
+            1) _m="One"     ;;
+            2) _m="Two"     ;;
+            3) _m="Three"   ;;
+            4) _m="Four"    ;;
+            5) _m="Five"    ;;
+            6) _m="Six"     ;;
+            7) _m="Seven"   ;;
+            8) _m="Eight"   ;;
+            9) _m="Nine"    ;;
         esac
 
     fi
 
     if [ -n "${_SHOWTENS}" ] ; then
-        show $_m
+        show $_M
     elif [ -n "${_SHOWONES}" ] ; then
-        show $_s
+        show $_m
     fi
 
 }
@@ -228,90 +313,66 @@ get_minute_tens() {
 
 get_hour() {
 
-    #     %l    is replaced by the hour (12-hour clock) as a decimal number (1-12); single digits are preceded by a blank.
-    #     %k    is replaced by the hour (24-hour clock) as a decimal number (0-23); single digits are preceded by a blank.
-    #     %I    is replaced by the hour (12-hour clock) as a decimal number (01-12).
-    #     %H - hour (24)
-
-    _h=$(date +'%I')
+    if [ -n "${_T24}" ] ; then
+        _h=$(date +'%H')
+    else
+        _h=$(date +'%I')
+    fi
 
     case $_h in
-        01) _h="One"    ;;
-        02) _h="Two"    ;;
-        03) _h="Three"  ;;
-        04) _h="Four"   ;;
-        05) _h="Five"   ;;
-        06) _h="Six"    ;;
-        07) _h="Seven"  ;;
-        08) _h="Eight"  ;;
-        09) _h="Nine"   ;;
-        11) _h="Eleven" ;;
-        12) _h="Twelve" ;;
+        00) _h="Zero"         ;;
+        01) _h="One"          ;;
+        02) _h="Two"          ;;
+        03) _h="Three"        ;;
+        04) _h="Four"         ;;
+        05) _h="Five"         ;;
+        06) _h="Six"          ;;
+        07) _h="Seven"        ;;
+        08) _h="Eight"        ;;
+        09) _h="Nine"         ;;
+        10) _h="Ten"          ;;
+        11) _h="Eleven"       ;;
+        12) _h="Twelve"       ;;
+        13) _h="Thirteen"     ;;
+        14) _h="Fourteen"     ;;
+        15) _h="Fifteen"      ;;
+        16) _h="Sixteen"      ;;
+        17) _h="Seventeen"    ;;
+        18) _h="Eighteen"     ;;
+        19) _h="Nineteen"     ;;
+        20) _h="Twenty"       ;;
+        21) _h="Twenty One"   ;;
+        22) _h="Twenty Two"   ;;
+        23) _h="Twenty Three" ;;
     esac
 
-    echo $_h
+    show $_h
 
 }
 
 
 
-get_day() {
-    echo $(date +'%d')
-}
-
-get_day_name() {
-
-    #     %a    is replaced by national representation of the abbreviated weekday name.
-    show $(date +'%A')
-}
-
-get_day_name_full() {
-
-    #     %A    is replaced by national representation of the full weekday name.
-    show $(date +'%A')
-
-}
-
-get_month() {
-
-    #     %d    is replaced by the day of the month as a decimal number (01-31).
-    #     %e    is replaced by the day of the month as a decimal number (1-31); single digits are preceded by a blank.
-    echo $(date +'%d')
-
-}
-
-get_month_name() {
-
-    #     %b    is replaced by national representation of the abbreviated month name.
-    show $(date +'%b')
-
-}
-
-
-get_month_name_full() {
-
-    #     %B    is replaced by national representation of the full month name.
-    show $(date +'%B')
-
-}
-
-get_year() {
-
-    # %Y - Year
-    echo $(date +'%Y')
-
-}
-
-
-while getopts ulhf:t: ARGS
+while getopts ulhf:t:R:F:S:K:C:HO:T ARGS
     do
         case $ARGS in
-            u)  _UPPER="TRUE"                ;;
-            l)  _LOWER="TRUE"                ;;
-            f)  _FORMAT="${OPTARG}"          ;;
-            t)  _TOKEN="${OPTARG}"           ;;
-            h)  show_help && exit 0          ;;
-           \?)  show_help && exit 1          ;;
+            # Output options
+            t)  _TOKEN="${_TOKEN}${_TOKEN:+ }${OPTARG}" ;;
+            f)  _FORMAT="${OPTARG}"                     ;;
+            O)  _OVERRIDE="${OPTARG}"                   ;;
+            u)  _UPPER="TRUE"                           ;;
+            l)  _LOWER="TRUE"                           ;;
+            T)  _T24="TRUE"                             ;;
+
+            # ImageMagick related options
+            R)  _ROTATE="${OPTARG}"                     ;;
+            F)  _FONT="${OPTARG}"                       ;;
+            S)  _FONTSIZE="${OPTARG}"                   ;;
+            K)  _FONTKERN="${OPTARG}"                   ;;
+            C)  _FONTCOLOR="${OPTARG}"                  ;;
+            H)  _FONTSHADOW="TRUE"                      ;;
+
+            h)  show_help && exit 0                     ;;
+           \?)  show_help && exit 1                     ;;
         esac
     done ; shift `expr ${OPTIND} - 1`
 
@@ -321,25 +382,49 @@ if [ -z "${_TOKEN}" -a -z "${_FORMAT}" ] ; then
     show_help
 fi
 
+if [ -n "${_ROTATE}" ] ; then
+
+    if [ ! -x "/usr/local/bin/convert" ] ; then
+        echo "ImageMagic not installed. Aborting."
+        exit 1
+    fi
+
+    [ -z "${_FONT}"       ] && _FONT=$_DEF_FONT
+    [ -z "${_FONTSIZE}"   ] && _FONTSIZE=$_DEF_FONTSIZE
+    [ -z "${_FONTKERN}"   ] && _FONTKERN=$_DEF_FONTKERN
+    [ -z "${_FONTCOLOR}"  ] && _FONTCOLOR=$_DEF_FONTCOLOR
+
+fi
+
+if [ ! -d "${_DEF_OUTPUT}" ] ; then
+    mkdir -p "${_DEF_OUTPUT}"
+    chmod 700 "${_DEF_OUTPUT}"
+fi
+
+if [ ! -w "${_DEF_OUTPUT}" ] ; then
+    echo "Problem creating image output directory. Aborting."
+    exit 1
+fi
+
 if [ -n "${_TOKEN}" ] ; then
 
     # Examples assume the current time is Sunday, April 12, 2015 17:52 US/Eastern
 
     case $_TOKEN in
-               year)   get_year              ;; # 2015
-              month)   get_month             ;; # April
-         month_name)   get_month_name        ;; # Apr
-    month_name_full)   get_month_name_full   ;; # 04
-                day)   get_day               ;; # Sunday
-           day_name)   get_day_name          ;; # Sun
-      day_name_full)   get_day_name_full     ;; # 12
+             tzname)   show $(date +'%Z')    ;; # EDT
+           tzoffset)   show $(date +'%z')    ;; # -04:00
+               year)   show $(date +'%Y')    ;; # 2015
+              month)   show $(date +'%m')    ;; # April
+         month_name)   show $(date +'%b')    ;; # Apr
+    month_name_full)   show $(date +'%B')    ;; # 04
+                day)   show $(date +'%d')    ;; # Sunday
+           day_name)   show $(date +'%A')    ;; # Sun
+      day_name_full)   show $(date +'%A')    ;; # 12
                hour)   get_hour              ;; # 05
         minute_tens)   get_minute_tens       ;; # fifty
         minute_ones)   get_minute_ones       ;; # two
                ampm)   get_ampm              ;; # PM
           ampm_long)   get_ampm_long         ;; # Prime Meridien
-             tzname)   get_tzname            ;; # EDT
-           tzoffset)   get_tzoffset          ;; # -04:00
     esac
 
 elif [ -n "${_FORMAT}" ] ; then
