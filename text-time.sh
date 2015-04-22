@@ -13,7 +13,7 @@
 #   You may need to adjust the shebang path of this script
 #   if using something other than brew to install the more
 #   recent bash version.
-# 
+#
 # DESCRIPTION
 #
 #   This script prints the time as words.  Intended for use
@@ -92,7 +92,7 @@
 #       Font shadow
 #
 # USAGE
-# 
+#
 #       Take a look at the Minimalist Text screenshots:
 #       https://play.google.com/store/apps/details?id=de.devmil.minimaltext&hl=en
 #
@@ -107,7 +107,7 @@
 #       geeklet 1:    text-time.sh -t hour -l         # ten
 #       geeklet 2:    text-time.sh -t minute_tens -u  # FIFTY
 #       geeklet 3:    text-time.sh -t minute_ones -l  # nine
-#   
+#
 #
 #       If CPU/battery consumption is too excessive, instead use cron jobs to
 #       update the time images:
@@ -183,9 +183,10 @@ get_ampm() {
 
     if [ -n "${_T24}" ] ; then
         show " "
+    else
+        show $(date +'%p')
     fi
 
-    show $(date +'%p')
 
 }
 
@@ -193,17 +194,19 @@ get_ampm_long() {
 
     if [ -n "${_T24}" ] ; then
         show " "
+    else
+
+        _ampm=$(date +'%p')
+
+        case $_ampm in
+            AM) _p="Ante Meridiem"  ;;
+            PM) _p="Post Meridiem"  ;;
+            \*) _p="${_ampm}"       ;;
+        esac
+
+        show "$_p"
+
     fi
-
-    _ampm=$(date +'%p')
-
-    case $_ampm in
-        AM) _p="Ante Meridiem"  ;;
-        PM) _p="Post Meridiem"  ;;
-        \*) _p="${_ampm}"       ;;
-    esac
-
-    show "$_p"
 
 }
 
