@@ -8,6 +8,7 @@ import select
 import argparse
 import os
 import termios
+import datetime
 import tty
 import threading
 from dataclasses import dataclass
@@ -276,7 +277,7 @@ def main():
                             output = f"{result.ip:>30}: {result.rtt:6.2f}ms  pass={counter:<3}"
                             if pinger.verbose:
                                 port_info = f" port={result.port}" if result.port else ""
-                                output += f" timeout={pinger.timeout} proto={pinger.ping_type}{port_info}"
+                                output += f" timeout={pinger.timeout} proto={pinger.ping_type}{port_info} timestamp={datetime.datetime.now()}"
                             output += "\n"
                             print(output)
                         elif not result.success:
