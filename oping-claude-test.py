@@ -57,7 +57,7 @@ class Pinger:
         self.paused = False
         
     def create_icmp_packet(self) -> bytes:
-        """Create an ICMP echo request packet."""
+        # """Create an ICMP echo request packet."""
         icmp_type = 8  # Echo request
         icmp_code = 0
         checksum = 0
@@ -225,7 +225,7 @@ def handle_keyboard_input(pinger: Pinger):
                     pinger.show_help()
 
 def parse_port(port_str: str) -> int:
-    """Convert a port string to integer, handling service names."""
+    # """Convert a port string to integer, handling service names."""
     try:
         return int(port_str)
     except ValueError:
@@ -234,80 +234,6 @@ def parse_port(port_str: str) -> int:
         except OSError:
             print(f"Warning: Unknown service '{port_str}', defaulting to 80")
             return 80
-
-def old_main():
-    parser = argparse.ArgumentParser(description='Interactive Python ping utility')
-    parser.add_argument('hosts', nargs='+', help='Hosts to ping')
-    parser.add_argument('--count', type=int, default=0, help='Number of pings to send')
-    parser.add_argument('--timeout', type=int, default=1, help='Timeout in seconds')
-    parser.add_argument('--type', choices=['icmp', 'syn'], default='icmp', help='Type of ping')
-    parser.add_argument('--port', action='append', help='Port(s) to use for TCP SYN ping (repeatable)')
-    parser.add_argument('--sleep', type=int, default=0, help='Sleep for specified seconds after each count cycle')
-    
-    args = parser.parse_args()
-    
-    if args.type == 'icmp' and os.geteuid() != 0:
-        print("Error: ICMP ping requires root privileges")
-        sys.exit(1)
-    
-    # Parse ports if specified
-    ports = None
-    if args.port:
-        ports = [parse_port(p) for p in args.port]
-    
-    pinger = Pinger(timeout=args.timeout, ping_type=args.type, ports=ports)
-    counter = 1
-    
-    # Start keyboard input handler in a separate thread
-    keyboard_thread = threading.Thread(target=handle_keyboard_input, args=(pinger,))
-    keyboard_thread.daemon = True
-    keyboard_thread.start()
-    
-    try:
-        print("\nPress 'h' for help with keyboard commands")
-        while pinger.running:
-            if not pinger.paused:
-                for host in args.hosts:
-                    results = pinger.ping(host)
-                    for result in results:
-                        pinger.update_stats(host, result)
-                        
-                        if result.success and (not pinger.lost_only):
-                            output = f"{result.ip:>30}: {result.rtt:6.2f}ms  pass={counter:<3}"
-                            if pinger.verbose:
-                                port_info = f" port={result.port}" if result.port else ""
-                                output += f" timeout={pinger.timeout} proto={pinger.ping_type}{port_info}"
-                            print(output)
-                        elif not result.success:
-                            output = f"{host:>30}: LOST     pass={counter:<3}"
-                            if pinger.verbose:
-                                port_info = f" port={result.port}" if result.port else ""
-                                output += f" timeout={pinger.timeout} proto={pinger.ping_type}{port_info}"
-                            print(output)
-                
-                if args.count > 0 and counter >= args.count:
-                    break
-                    
-                if pinger.sleep > 0:
-                    time.sleep(pinger.sleep)
-                time.sleep(1)  # Base delay
-                counter += 1
-            else:
-                time.sleep(0.1)  # Reduced CPU usage while paused
-            
-    except KeyboardInterrupt:
-        pinger.running = False
-        print("\nStopping ping...")
-    
-    # Show final statistics
-    pinger.show_stats()
-
-
-
-
-#!/usr/bin/env python3
-
-# [Previous imports remain the same...]
 
 def main():
     parser = argparse.ArgumentParser(description='Interactive Python ping utility')
