@@ -13,6 +13,7 @@ use Term::ReadKey qw/ReadMode ReadKey/;
 my $opts = {};
 
 $opts->{count}   = 0;
+$opts->{sleep}   = 0;
 $opts->{timeout} = 1;
 $opts->{U}       = 0;
 $opts->{i}       = '';
@@ -21,14 +22,22 @@ $opts->{syn}     = 0;
 $opts->{icmp}    = 0;
 $opts->{debug}   = 0;
 $opts->{verbose} = 0;
+$opts->{delay}   = 1;
+
+$opts->{lost_only} = 0;
+$opts->{high_ping} = 200;
 
 GetOptions( $opts,
                     'host=s@{,}',       # Hosts to ping.  Repeatable.
                     'files=s@{,}',      # filenames containing more hosts
                     'count=i',          # number of pings to send
+                    'sleep=i',          # Instead of exit, sleep for x seconds after count
+                    'delay=i',          # Delay between pings
                     'U!',               # whether unsuccessful pings count towards the avg
                     'timeout=i',        # Timeout for pings, in seconds.
                     'i|ip|interface=s', #
+                    'l|lost|lost_only!',# only display pings that were lost
+                    'high_ping=i',      # high pings will kick us out of lost_only mode
                     'type=s',           # ping type
                     'syn!',
                     'imcp!',
@@ -36,6 +45,28 @@ GetOptions( $opts,
                     'debug!',
                     'verbose!',
 );
+
+our $verbose =
+    defined $opts->{verbose}
+    &&      $opts->{verbose}
+          ? 1
+          : 0
+          ;
+
+our $lost_only =
+    defined $opts->{l}
+    &&      $opts->{l}
+          ? 1
+          : 0
+          ;
+
+our $sleep =
+    defined $opts->{sleep}
+    &&      $opts->{sleep}
+          ? $opts->{sleep}
+          : 0
+          ;
+
 
 if ( $opts->{icmp} ) {
     $opts->{type} = 'icmp';
@@ -134,20 +165,23 @@ while ( scalar @{$opts->{host}} ) {
 
                     push @{$stats->{$cur_host}->{$cur_port}->{successful}}, $ms;
 
-                    print sprintf( "%16s: ",    $ip )
-                        . sprintf( "%6.2fms ",  $ms )
-                        . sprintf( "pass=%-7d", $counter )
-                        ;
+                    if ( ! $lost_only ) {
 
-                    print ' '
-                        . sprintf( "timeout=%-2d",  $p->{timeout} ) . ' '
-                        . sprintf( "datasize=%-4d", $p->{data_size} )
-                        . ' proto=' . $p->{proto}
-                        . ' port='  . $p->{port_num}
-                        if $opts->{verbose};
+                        print sprintf( "%30s: ",    $ip )
+                            . sprintf( "%6.2fms ",  $ms )
+                            . sprintf( "pass=%-7d", $counter )
+                            ;
 
+                        print ' '
+                            . sprintf( "timeout=%-2d",  $p->{timeout} ) . ' '
+                            . sprintf( "datasize=%-4d", $p->{data_size} )
+                            . ' proto=' . $p->{proto}
+                            . ' port='  . $p->{port_num}
+                            if $verbose;
 
-                    print "\n";
+                        print "\n";
+
+                    }
 
                     # }}}
 
@@ -155,15 +189,21 @@ while ( scalar @{$opts->{host}} ) {
 
                     # {{{ unsuccessful
 
-                    print sprintf( "%16s: ",    $cur_host )
+                    print sprintf( "%30s: ",    $cur_host )
                         . '    LOST '
                         . sprintf( "pass=%-7d", $counter )
                         ;
 
+                   #ddump( 'p', $p ) if $opts->{debug};
+                   #ddump( 'cur_host', $cur_host ); # if $opts->{debug};
+                   #ddump( 'nack', $p->nack($cur_host) ); # if $opts->{debug};
+
+                    my $nack = $p->nack($cur_host);
+
                     print ' proto=' . $p->{proto}
                         . '  port=' . $p->{port_num}
-                        . ' err='   . $p->nack($cur_host)
-                        if $opts->{verbose}
+                        . ' err='   . $nack ? $nack : ''
+                        if $verbose
                         ;
 
                     print "\n";
@@ -212,17 +252,28 @@ while ( scalar @{$opts->{host}} ) {
                 ddump( 'duration', $duration ) if $opts->{debug};
                 ddump( 'ip',       $ip       ) if $opts->{debug};
 
-                print sprintf( "%16s: ",    $ip      )
-                    . sprintf( "%6.2fms ",  $ms      )
-                    . sprintf( "pass=%-3d", $counter );
+                # High pings should kick us out of lost_only mode.
+                #
+                #if ( $ms > $opts->{high_ping} ) {
+                #    $lost_only = 0;
+                #}
 
-                print ' '
-                    . sprintf( "timeout=%-2d ",  $p->{timeout}   )
-                    . sprintf( "datasize=%-4d ", $p->{data_size} )
-                    . 'proto=' . $p->{proto}
-                    if $opts->{verbose};
+                if ( ! $lost_only || $ms > $opts->{high_ping} ) {
 
-                print "\n";
+                    print sprintf( "%30s: ",    $ip      )
+                        . sprintf( "%6.2fms ",  $ms      )
+                        . sprintf( "pass=%-3d", $counter );
+
+                    print ' '
+                        . sprintf( "timeout=%-2d ",  $p->{timeout}   )
+                        . sprintf( "datasize=%-4d ", $p->{data_size} )
+                        . 'proto=' . $p->{proto}
+                        . ' timestamp=' . scalar localtime
+                        if $verbose;
+
+                    print "\n";
+
+                }
 
                 # }}}
 
@@ -231,11 +282,17 @@ while ( scalar @{$opts->{host}} ) {
                 # {{{ unsuccessful
                 #
 
-                print sprintf( "%16s: ", $cur_host )
+                print sprintf( "%30s: ", $cur_host )
                     . ' LOST    '
                     . sprintf( "pass=%-3d", $counter )
                     ;
 
+                print ' '
+                    . sprintf( "timeout=%-2d ",  $p->{timeout}   )
+                    . sprintf( "datasize=%-4d ", $p->{data_size} )
+                    . 'proto=' . $p->{proto}
+                    . ' timestamp=' . scalar localtime
+                    if $verbose;
 
                 print "\n";
 
@@ -246,6 +303,7 @@ while ( scalar @{$opts->{host}} ) {
                     if $opts->{U};
 
                 # }}}
+
             }
 
             # }}}
@@ -269,11 +327,7 @@ while ( scalar @{$opts->{host}} ) {
 
         if ( $key eq 'v' ) {
 
-            $opts->{verbose} =
-                $opts->{verbose}
-                ? 0
-                : 1
-                ;
+            $verbose = $verbose ? 0 : 1;
 
         } elsif ( $key eq 'd' ) {
 
@@ -287,12 +341,42 @@ while ( scalar @{$opts->{host}} ) {
 
             show_stats( $stats );
 
+        } elsif ( $key eq 'l' ) {
+
+            $lost_only = 
+                $lost_only > 0
+                ? 0
+                : 1
+                ;
+
+        } elsif ( $key =~ m/^\d$/ ) {
+
+            $sleep = $key;
+
+            print "\nSLEEP: 1 + $sleep\n";
+
+        } elsif ( $key eq '+' or $key eq '=' ) {
+
+            $sleep += 1;
+
+            print "\nSLEEP: 1 + $sleep\n";
+
+        } elsif ( $key eq '-' ) {
+
+            if ( $sleep <= 0 ) {
+                $sleep = 0;
+            } else {
+                $sleep--;
+            }
+
+            print "\nSLEEP: 1 + $sleep\n";
+
         } elsif ( $key eq 'p' ) {
             print "\nPAUSED - [Enter] to continue : ";
             <STDIN>;
             print "\n\n";
         } else {
-            print "\n${hr}\n[q]quit,[v]erbose toggle,[p]ause,[s]tats up to now\n${hr}\n";
+            print "\n${hr}\n[q]quit,[v]erbose toggle,[p]ause,[s]tats up to now,[l]ost packets only,[1-9] set extra sleep time\n${hr}\n";
         }
 
     }
@@ -301,7 +385,14 @@ while ( scalar @{$opts->{host}} ) {
 
     $counter++;
 
-    last if $opts->{count} && $counter > $opts->{count};
+   #if ( $opts->{sleep} && $opts->{count} && $counter > $opts->{count} ) {
+    if ( $opts->{sleep} && ( ( $counter % $opts->{count} ) == 0 ) ) {
+        print 'SLEEPING additional ' . $sleep . " seconds.\n"
+            if $opts->{debug};
+        sleep $sleep;
+    } elsif ( ! $opts->{sleep} && $opts->{count} && $counter > $opts->{count} ) {
+        last;
+    }
 
 }
 
@@ -433,7 +524,7 @@ sub show_stats {
                 if ( @cur_host_stats ) {
 
                     push @output, 
-                        sprintf( "%16s: ", $cur_host )
+                        sprintf( "%30s: ", $cur_host )
                         . join( ' ', @cur_host_stats );
 
                 }
@@ -489,7 +580,7 @@ sub parse_hostfiles {
             next unless length $_;
 
             print "Reading value from hostnames file: $_\n"
-                if $opts->{verbose};
+                if $verbose;
 
             push @hosts, $_;
 
@@ -564,6 +655,10 @@ File containing hostnames.  Repeatable.
 Number of ping passes. 0 = indefinite.
 
 (default: 0)
+
+=item B<--sleep> <num>
+
+Sleep the specified number of seconds between the specified count.  So --count 10 --sleep 60 will perform 10 pings and then sleep for 60 seconds then do it again.
 
 =item B<--timeout> <seconds>
 
