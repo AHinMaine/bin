@@ -94,7 +94,7 @@ class Pinger:
                 raise ValueError(f"Unsupported ping type: {self.ping_type}")
         except Exception as e:
             if self.debug:
-                print(f"Error pinging {host}: {e}")
+                print(f"Error pinging {host}: {e}", end="\r\n")
             return [PingResult(host, None, None)]
 
     def _icmp_ping(self, host: str) -> PingResult:
@@ -124,7 +124,7 @@ class Pinger:
                         
         except socket.error as e:
             if e.errno == 1:
-                print("Operation not permitted - ICMP messages can only be sent by root user")
+                print("Operation not permitted - ICMP messages can only be sent by root user", end="\r\n")
             return PingResult(host, None, None)
 
     def _syn_ping(self, host: str, port: int) -> PingResult:
@@ -160,8 +160,8 @@ class Pinger:
             stats.unsuccessful.append(len(stats.successful) + len(stats.unsuccessful) + 1)
 
     def show_stats(self):
-        print("\nPing statistics:")
-        print("-" * 40)
+        print("Ping statistics:", end="\r\n")
+        print("-" * 40, end="\r\n")
         for host, ports in self.stats.items():
             for port_key, stats in ports.items():
                 successful = len(stats.successful)
@@ -171,21 +171,21 @@ class Pinger:
                 avg_rtt = sum(stats.successful) / successful if successful > 0 else 0
                 
                 port_display = "proto=icmp" if port_key == 'icmp' else f"port={port_key:5}"
-                print(f"{host:>30}: "
-                      f"{port_display:<10} "
-                      f"{successful:3d} succ "
-                      f"{unsuccessful:3d} unsucc "
-                      f"{loss_percent:5.1f}% loss "
-                      f"{avg_rtt:6.2f}ms/avg")
-        print("-" * 40)
+                print(f"{host:>30}: ",
+                      f"{port_display:<10} ",
+                      f"{successful:3d} succ ",
+                      f"{unsuccessful:3d} unsucc ",
+                      f"{loss_percent:5.1f}% loss ",
+                      f"{avg_rtt:6.2f}ms/avg", end="\r\n")
+        print("-" * 40, end="\r\n")
 
     def show_help(self):
         hr = "-" * 40
-        print(f"\n{hr}")
-        print("[q]uit, [v]erbose toggle, [p]ause, [s]tats up to now")
-        print("[l]ost packets only, [1-9] set extra sleep time")
-        print("[+/-] adjust sleep time, [d]ebug toggle")
-        print(f"{hr}\n")
+        print(f"{hr}", end="\r\n")
+        print("[q]uit, [v]erbose toggle, [p]ause, [s]tats up to now", end="\r\n")
+        print("[l]ost packets only, [1-9] set extra sleep time", end="\r\n")
+        print("[+/-] adjust sleep time, [d]ebug toggle", end="\r\n")
+        print(f"{hr}", end="\r\n")
 
 def handle_keyboard_input(pinger: Pinger):
     with KeyboardReader() as reader:
@@ -196,32 +196,32 @@ def handle_keyboard_input(pinger: Pinger):
                     pinger.running = False
                 elif key == 'v':
                     pinger.verbose = not pinger.verbose
-                    print(f"\nVerbose mode: {'on' if pinger.verbose else 'off'}")
+                    print(f"\nVerbose mode: {'on' if pinger.verbose else 'off'}", end="\r\n")
                 elif key == 'd':
                     pinger.debug = not pinger.debug
-                    print(f"\nDebug mode: {'on' if pinger.debug else 'off'}")
+                    print(f"\nDebug mode: {'on' if pinger.debug else 'off'}", end="\r\n")
                 elif key == 's':
                     pinger.show_stats()
                 elif key == 'l':
                     pinger.lost_only = not pinger.lost_only
-                    print(f"\nShowing {'only lost packets' if pinger.lost_only else 'all packets'}")
+                    print(f"\rShowing {'only lost packets' if pinger.lost_only else 'all packets'}", end="\r\n")
                 elif key == 'p':
                     pinger.paused = True
                     print("\nPAUSED - Press Enter to continue: ", end='', flush=True)
                     while pinger.running:
                         if reader.get_key() == '\r':
                             pinger.paused = False
-                            print("\nResuming...\n")
+                            print("\nResuming...\r")
                             break
                 elif key.isdigit():
                     pinger.sleep = int(key)
-                    print(f"\nSleep time set to: {pinger.sleep} seconds")
+                    print(f"\rSleep time set to: {pinger.sleep} seconds", end="\r\n")
                 elif key in ['+', '=']:
                     pinger.sleep += 1
-                    print(f"\nSleep time increased to: {pinger.sleep} seconds")
+                    print(f"\rSleep time increased to: {pinger.sleep} seconds", end="\r\n")
                 elif key == '-':
                     pinger.sleep = max(0, pinger.sleep - 1)
-                    print(f"\nSleep time decreased to: {pinger.sleep} seconds")
+                    print(f"\rSleep time decreased to: {pinger.sleep} seconds", end="\r\n")
                 elif key == 'h':
                     pinger.show_help()
 
@@ -265,7 +265,7 @@ def main():
     keyboard_thread.start()
     
     try:
-        print("\nPress 'h' for help with keyboard commands")
+        print("Press 'h' for help with keyboard commands", end="\r\n")
         while pinger.running:
             if not pinger.paused:
                 for host in args.hosts:
@@ -278,19 +278,18 @@ def main():
                             if pinger.verbose:
                                 port_info = f" port={result.port}" if result.port else ""
                                 output += f" timeout={pinger.timeout} proto={pinger.ping_type}{port_info} timestamp={datetime.datetime.now()}"
-                            output += "\n"
-                            print(output)
+                            print(output, end="\r\n")
                         elif not result.success:
                             output = f"{host:>30}: LOST     pass={counter:<3}"
                             if pinger.verbose:
                                 port_info = f" port={result.port}" if result.port else ""
                                 output += f" timeout={pinger.timeout} proto={pinger.ping_type}{port_info}"
-                            print(output, end="\n")
+                            print(output, end="\r\n")
                 
                 if args.count > 0:
                     if counter >= args.count:
                         if args.sleep > 0:  # If --sleep is specified
-                            print(f"\nCompleted {args.count} pings, sleeping for {args.sleep} seconds...")
+                            print(f"Completed {args.count} pings, sleeping for {args.sleep} seconds...", end="\r\n")
                             time.sleep(args.sleep)
                             counter = 1  # Reset counter to start next cycle
                             continue
@@ -306,7 +305,7 @@ def main():
             
     except KeyboardInterrupt:
         pinger.running = False
-        print("\nStopping ping...")
+        print("Stopping ping...", end="\r\n")
     
     # Show final statistics
     pinger.show_stats()
