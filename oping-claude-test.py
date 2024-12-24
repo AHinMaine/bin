@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 
+import os
+import sys
+import tty
+import time
+import select
 import socket
 import struct
-import time
-import sys
-import select
-import argparse
-import os
 import termios
+import argparse
 import datetime
-import tty
 import threading
 from dataclasses import dataclass
 from typing import List, Dict, Optional, Tuple, Set
@@ -30,15 +30,15 @@ class PingResult:
 class KeyboardReader:
     def __init__(self):
         self.old_settings = None
-    
+
     def __enter__(self):
         self.old_settings = termios.tcgetattr(sys.stdin)
         tty.setraw(sys.stdin.fileno())
         return self
-        
+
     def __exit__(self, type, value, traceback):
         termios.tcsetattr(sys.stdin, termios.TCSADRAIN, self.old_settings)
-    
+
     def get_key(self) -> Optional[str]:
         if select.select([sys.stdin], [], [], 0)[0]:
             return sys.stdin.read(1)
@@ -56,7 +56,7 @@ class Pinger:
         self.sleep = 0
         self.running = True
         self.paused = False
-        
+
     def create_icmp_packet(self) -> bytes:
         # """Create an ICMP echo request packet."""
         icmp_type = 8  # Echo request
@@ -64,13 +64,13 @@ class Pinger:
         checksum = 0
         identifier = os.getpid() & 0xFFFF
         sequence = 1
-        
+
         header = struct.pack('!BBHHH', icmp_type, icmp_code, checksum, identifier, sequence)
         data = b'Python Ping'
-        
+
         checksum = self._calculate_checksum(header + data)
         header = struct.pack('!BBHHH', icmp_type, icmp_code, checksum, identifier, sequence)
-        
+
         return header + data
 
     def _calculate_checksum(self, data: bytes) -> int:
@@ -94,7 +94,7 @@ class Pinger:
                 raise ValueError(f"Unsupported ping type: {self.ping_type}")
         except Exception as e:
             if self.debug:
-                print(f"Error pinging {host}: {e}", end="\r\n")
+                printrn(f"Error pinging {host}: {e}")
             return [PingResult(host, None, None)]
 
     def _icmp_ping(self, host: str) -> PingResult:
@@ -102,29 +102,29 @@ class Pinger:
             with socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP) as sock:
                 sock.settimeout(self.timeout)
                 ip = socket.gethostbyname(host)
-                
+
                 packet = self.create_icmp_packet()
                 start_time = time.time()
                 sock.sendto(packet, (ip, 0))
-                
+
                 while True:
                     ready = select.select([sock], [], [], self.timeout)
                     if not ready[0]:
                         return PingResult(host, None, None)
-                        
+
                     receive_time = time.time()
                     recv_packet, addr = sock.recvfrom(1024)
-                    
+
                     icmp_header = recv_packet[20:28]
                     type, code, checksum, p_id, sequence = struct.unpack('!BBHHH', icmp_header)
-                    
+
                     if type == 0:  # Echo Reply
                         rtt = (receive_time - start_time) * 1000
                         return PingResult(host, rtt, ip)
-                        
+
         except socket.error as e:
             if e.errno == 1:
-                print("Operation not permitted - ICMP messages can only be sent by root user", end="\r\n")
+                printrn("Operation not permitted - ICMP messages can only be sent by root user")
             return PingResult(host, None, None)
 
     def _syn_ping(self, host: str, port: int) -> PingResult:
@@ -132,17 +132,17 @@ class Pinger:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
                 sock.settimeout(self.timeout)
                 ip = socket.gethostbyname(host)
-                
+
                 start_time = time.time()
                 result = sock.connect_ex((ip, port))
                 end_time = time.time()
-                
+
                 if result == 0:
                     rtt = (end_time - start_time) * 1000
                     return PingResult(host, rtt, ip, port)
-                    
+
                 return PingResult(host, None, None, port)
-                
+
         except socket.error:
             return PingResult(host, None, None, port)
 
@@ -152,7 +152,7 @@ class Pinger:
             self.stats[host] = {}
         if port_key not in self.stats[host]:
             self.stats[host][port_key] = PingStats([], [])
-            
+
         stats = self.stats[host][port_key]
         if result.success:
             stats.successful.append(result.rtt)
@@ -160,8 +160,8 @@ class Pinger:
             stats.unsuccessful.append(len(stats.successful) + len(stats.unsuccessful) + 1)
 
     def show_stats(self):
-        print("Ping statistics:", end="\r\n")
-        print("-" * 40, end="\r\n")
+        printrn("Ping statistics:")
+        printrn("-" * 40)
         for host, ports in self.stats.items():
             for port_key, stats in ports.items():
                 successful = len(stats.successful)
@@ -169,23 +169,23 @@ class Pinger:
                 total = successful + unsuccessful
                 loss_percent = (unsuccessful / total * 100) if total > 0 else 0
                 avg_rtt = sum(stats.successful) / successful if successful > 0 else 0
-                
+
                 port_display = "proto=icmp" if port_key == 'icmp' else f"port={port_key:5}"
-                print(f"{host:>30}: ",
+                printrn(f"{host:>30}: ",
                       f"{port_display:<10} ",
                       f"{successful:3d} succ ",
                       f"{unsuccessful:3d} unsucc ",
                       f"{loss_percent:5.1f}% loss ",
-                      f"{avg_rtt:6.2f}ms/avg", end="\r\n")
-        print("-" * 40, end="\r\n")
+                      f"{avg_rtt:6.2f}ms/avg")
+        printrn("-" * 40)
 
     def show_help(self):
         hr = "-" * 40
-        print(f"{hr}", end="\r\n")
-        print("[q]uit, [v]erbose toggle, [p]ause, [s]tats up to now", end="\r\n")
-        print("[l]ost packets only, [1-9] set extra sleep time", end="\r\n")
-        print("[+/-] adjust sleep time, [d]ebug toggle", end="\r\n")
-        print(f"{hr}", end="\r\n")
+        printrn(f"{hr}")
+        printrn("[q]uit, [v]erbose toggle, [p]ause, [s]tats up to now")
+        printrn("[l]ost packets only, [1-9] set extra sleep time")
+        printrn("[+/-] adjust sleep time, [d]ebug toggle")
+        printrn(f"{hr}")
 
 def handle_keyboard_input(pinger: Pinger):
     with KeyboardReader() as reader:
@@ -196,15 +196,15 @@ def handle_keyboard_input(pinger: Pinger):
                     pinger.running = False
                 elif key == 'v':
                     pinger.verbose = not pinger.verbose
-                    print(f"\nVerbose mode: {'on' if pinger.verbose else 'off'}", end="\r\n")
+                    printrn(f"\nVerbose mode: {'on' if pinger.verbose else 'off'}")
                 elif key == 'd':
                     pinger.debug = not pinger.debug
-                    print(f"\nDebug mode: {'on' if pinger.debug else 'off'}", end="\r\n")
+                    printrn(f"\nDebug mode: {'on' if pinger.debug else 'off'}")
                 elif key == 's':
                     pinger.show_stats()
                 elif key == 'l':
                     pinger.lost_only = not pinger.lost_only
-                    print(f"\rShowing {'only lost packets' if pinger.lost_only else 'all packets'}", end="\r\n")
+                    printrn(f"\rShowing {'only lost packets' if pinger.lost_only else 'all packets'}")
                 elif key == 'p':
                     pinger.paused = True
                     print("\nPAUSED - Press Enter to continue: ", end='', flush=True)
@@ -215,13 +215,13 @@ def handle_keyboard_input(pinger: Pinger):
                             break
                 elif key.isdigit():
                     pinger.sleep = int(key)
-                    print(f"\rSleep time set to: {pinger.sleep} seconds", end="\r\n")
+                    printrn(f"\rSleep time set to: {pinger.sleep} seconds")
                 elif key in ['+', '=']:
                     pinger.sleep += 1
-                    print(f"\rSleep time increased to: {pinger.sleep} seconds", end="\r\n")
+                    printrn(f"\rSleep time increased to: {pinger.sleep} seconds")
                 elif key == '-':
                     pinger.sleep = max(0, pinger.sleep - 1)
-                    print(f"\rSleep time decreased to: {pinger.sleep} seconds", end="\r\n")
+                    printrn(f"\rSleep time decreased to: {pinger.sleep} seconds")
                 elif key == 'h':
                     pinger.show_help()
 
@@ -236,6 +236,14 @@ def parse_port(port_str: str) -> int:
             print(f"Warning: Unknown service '{port_str}', defaulting to 80")
             return 80
 
+def printrn(*string):
+    # For some reason, probably the keyboard input handling, the line breaking
+    # is hosed unless you do \r\n
+    for cur in string:
+        print(cur, end='')
+
+    print('', end="\r\n")
+
 def main():
     parser = argparse.ArgumentParser(description='Interactive Python ping utility')
     parser.add_argument('hosts',        nargs='+',                                  help='Hosts to ping')
@@ -244,69 +252,69 @@ def main():
     parser.add_argument('--timeout',    type=int,                   default=1,      help='Timeout in seconds')
     parser.add_argument('--type',       choices=['icmp', 'syn'],    default='icmp', help='Type of ping')
     parser.add_argument('--port',       action='append',                            help='Port(s) to use for TCP SYN ping (repeatable)')
-    
+
     args = parser.parse_args()
-    
+
     if args.type == 'icmp' and os.geteuid() != 0:
         print("Error: ICMP ping requires root privileges")
         sys.exit(1)
-    
+
     # Parse ports if specified
     ports = None
     if args.port:
         ports = [parse_port(p) for p in args.port]
-    
+
     pinger = Pinger(timeout=args.timeout, ping_type=args.type, ports=ports)
     counter = 1
-    
+
     # Start keyboard input handler in a separate thread
     keyboard_thread = threading.Thread(target=handle_keyboard_input, args=(pinger,))
     keyboard_thread.daemon = True
     keyboard_thread.start()
-    
+
     try:
-        print("Press 'h' for help with keyboard commands", end="\r\n")
+        printrn("Press 'h' for help with keyboard commands")
         while pinger.running:
             if not pinger.paused:
                 for host in args.hosts:
                     results = pinger.ping(host)
                     for result in results:
                         pinger.update_stats(host, result)
-                        
-                        if result.success and (not pinger.lost_only):
+
+                        if result.success and ( (not pinger.lost_only) or result.rtt > 200):
                             output = f"{result.ip:>30}: {result.rtt:6.2f}ms  pass={counter:<3}"
                             if pinger.verbose:
                                 port_info = f" port={result.port}" if result.port else ""
                                 output += f" timeout={pinger.timeout} proto={pinger.ping_type}{port_info} timestamp={datetime.datetime.now()}"
-                            print(output, end="\r\n")
+                            printrn(output)
                         elif not result.success:
                             output = f"{host:>30}: LOST     pass={counter:<3}"
                             if pinger.verbose:
                                 port_info = f" port={result.port}" if result.port else ""
                                 output += f" timeout={pinger.timeout} proto={pinger.ping_type}{port_info}"
-                            print(output, end="\r\n")
-                
+                            printrn(output)
+
                 if args.count > 0:
                     if counter >= args.count:
                         if args.sleep > 0:  # If --sleep is specified
-                            print(f"Completed {args.count} pings, sleeping for {args.sleep} seconds...", end="\r\n")
+                            printrn(f"Completed {args.count} pings, sleeping for {args.sleep} seconds...")
                             time.sleep(args.sleep)
                             counter = 1  # Reset counter to start next cycle
                             continue
                         else:
                             break  # Exit if no sleep specified
-                    
+
                 if pinger.sleep > 0:
                     time.sleep(pinger.sleep)
                 time.sleep(1)  # Base delay
                 counter += 1
             else:
                 time.sleep(0.1)  # Reduced CPU usage while paused
-            
+
     except KeyboardInterrupt:
         pinger.running = False
-        print("Stopping ping...", end="\r\n")
-    
+        printrn("Stopping ping...")
+
     # Show final statistics
     pinger.show_stats()
 
