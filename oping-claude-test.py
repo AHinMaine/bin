@@ -291,7 +291,7 @@ def main():
                             output = f"{host:>30}: LOST     pass={counter:<3}"
                             if pinger.verbose:
                                 port_info = f" port={result.port}" if result.port else ""
-                                output += f" timeout={pinger.timeout} proto={pinger.ping_type}{port_info}"
+                                output += f" timeout={pinger.timeout} proto={pinger.ping_type}{port_info} timestamp={datetime.datetime.now()}"
                             printrn(output)
 
                 if args.count > 0:
