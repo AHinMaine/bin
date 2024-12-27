@@ -11,6 +11,7 @@ import termios
 import argparse
 import datetime
 import threading
+import subprocess
 from dataclasses import dataclass
 from typing import List, Dict, Optional, Tuple, Set
 
@@ -56,6 +57,7 @@ class Pinger:
         self.sleep = 0
         self.running = True
         self.paused = False
+        self.interface_ip = ''
 
     def create_icmp_packet(self) -> bytes:
         # """Create an ICMP echo request packet."""
@@ -187,9 +189,45 @@ class Pinger:
         printrn("[+/-] adjust sleep time, [d]ebug toggle")
         printrn(f"{hr}")
 
+def get_default_gateway_interface():
+    #
+    # Gets the interface associated with the default gateway on macOS.
+    #
+    # Returns:
+    #     str: The name of the interface, or None if not found.
+    #
+    try:
+        output = subprocess.check_output(["route", "-n", "get", "default"], text=True)
+        lines = output.splitlines()
+        for line in lines:
+            if "interface:" in line:
+                interface = line.split()[1]
+                return interface
+    except subprocess.CalledProcessError:
+        pass  # Handle potential errors (e.g., command not found)
+    return None
+
+def get_ip_address(interface):
+    #
+    # Gets the IP address of the specified network interface.
+    #
+    # Args:
+    #     interface (str): The name of the network interface.
+    #
+    # Returns:
+    #     str: The IP address, or None if not found.
+    #
+    try:
+        output = subprocess.check_output(["ipconfig", "getifaddr", interface], text=True)
+        return output.strip()
+    except subprocess.CalledProcessError:
+        pass  # Handle potential errors (e.g., interface not found)
+    return None
+
 def handle_keyboard_input(pinger: Pinger):
     with KeyboardReader() as reader:
         while pinger.running:
+            time.sleep(0.1)  # Reduced CPU usage while paused
             key = reader.get_key()
             if key:
                 if key.lower() == 'q':
@@ -275,6 +313,19 @@ def main():
     try:
         printrn("Press 'h' for help with keyboard commands")
         while pinger.running:
+
+            interface = get_default_gateway_interface()
+
+            if interface:
+                ip_address = get_ip_address(interface)
+                if ip_address:
+                    pinger.interface_ip = f"({interface}) {ip_address}"
+                else:
+                    print(f"Could not get IP address for interface: {interface}")
+                    pinger.interface_ip = f"({interface}) NO IP"
+            else:
+                pinger.interface_ip = '(IFACE UNKNOWN)'
+
             if not pinger.paused:
                 for host in args.hosts:
                     results = pinger.ping(host)
@@ -282,13 +333,13 @@ def main():
                         pinger.update_stats(host, result)
 
                         if result.success and ( (not pinger.lost_only) or result.rtt > 200):
-                            output = f"{result.ip:>30}: {result.rtt:6.2f}ms  pass={counter:<3}"
+                            output = f"{pinger.interface_ip:>20} {result.ip:>20}: {result.rtt:6.2f}ms  pass={counter:<3}"
                             if pinger.verbose:
                                 port_info = f" port={result.port}" if result.port else ""
                                 output += f" timeout={pinger.timeout} proto={pinger.ping_type}{port_info} timestamp={datetime.datetime.now()}"
                             printrn(output)
                         elif not result.success:
-                            output = f"{host:>30}: LOST     pass={counter:<3}"
+                            output = f"{pinger.interface_ip:>20} {host:>30}: LOST     pass={counter:<3}"
                             if pinger.verbose:
                                 port_info = f" port={result.port}" if result.port else ""
                                 output += f" timeout={pinger.timeout} proto={pinger.ping_type}{port_info} timestamp={datetime.datetime.now()}"
