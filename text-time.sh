@@ -91,6 +91,12 @@
 #   -H
 #       Font shadow
 #
+#   -G
+#       Gravity.  Refers to the ImageMagick --gravity option.  See
+#       https://imagemagick.org/script/command-line-options.php#gravity for
+#       reference.  Choices are: NorthWest, North, NorthEast, West, Center,
+#       East, SouthWest, South, SouthEast
+#       
 # USAGE
 #
 #       Take a look at the Minimalist Text screenshots:
@@ -126,6 +132,7 @@ _DEF_FONTSIZE=48
 _DEF_FONTKERN=1
 _DEF_FONTCOLOR=white
 _DEF_FONTWEIGHT=Normal
+_DEF_GRAVITY=South
 _DEF_OUTPUT=/var/tmp/`whoami`/text-time
 
 show_help() {
@@ -165,7 +172,7 @@ show() {
                 -fill ${_FONTCOLOR} \
                 -font "${_FONT}" \
                 -kerning ${_FONTKERN} \
-                -gravity South \
+                -gravity ${_GRAVITY} \
                 -pointsize ${_FONTSIZE} \
                 -antialias label:@- ${_FONTSHADOW:+\( +clone -shadow 70x5+5+5 \) +swap +flatten} \
                 -rotate ${_ROTATE} \
@@ -355,7 +362,7 @@ get_hour() {
 
 
 
-while getopts ulhf:t:R:F:S:K:C:HO:T ARGS
+while getopts ulhf:t:R:F:S:K:C:HO:TG: ARGS
     do
         case $ARGS in
             # Output options
@@ -373,6 +380,7 @@ while getopts ulhf:t:R:F:S:K:C:HO:T ARGS
             K)  _FONTKERN="${OPTARG}"                   ;;
             C)  _FONTCOLOR="${OPTARG}"                  ;;
             H)  _FONTSHADOW="TRUE"                      ;;
+            G)  _GRAVITY="${OPTARG}"                    ;;
 
             h)  show_help && exit 0                     ;;
            \?)  show_help && exit 1                     ;;
@@ -396,6 +404,7 @@ if [ -n "${_ROTATE}" ] ; then
     [ -z "${_FONTSIZE}"   ] && _FONTSIZE=$_DEF_FONTSIZE
     [ -z "${_FONTKERN}"   ] && _FONTKERN=$_DEF_FONTKERN
     [ -z "${_FONTCOLOR}"  ] && _FONTCOLOR=$_DEF_FONTCOLOR
+    [ -z "${_GRAVITY}"    ] && _GRAVITY=$_DEF_GRAVITY
 
 fi
 
