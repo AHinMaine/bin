@@ -97,6 +97,9 @@
 #       reference.  Choices are: NorthWest, North, NorthEast, West, Center,
 #       East, SouthWest, South, SouthEast
 #       
+#   -W  <words>
+#       Any arbitrary words.
+#       
 # USAGE
 #
 #       Take a look at the Minimalist Text screenshots:
@@ -362,7 +365,7 @@ get_hour() {
 
 
 
-while getopts ulhf:t:R:F:S:K:C:HO:TG: ARGS
+while getopts ulhf:t:R:F:S:K:C:HO:TG:W: ARGS
     do
         case $ARGS in
             # Output options
@@ -372,6 +375,7 @@ while getopts ulhf:t:R:F:S:K:C:HO:TG: ARGS
             u)  _UPPER="TRUE"                           ;;
             l)  _LOWER="TRUE"                           ;;
             T)  _T24="TRUE"                             ;;
+            W)  _WORDS="${OPTARG}" ; _TOKEN="text"      ;;
 
             # ImageMagick related options
             R)  _ROTATE="${OPTARG}"                     ;;
@@ -396,7 +400,7 @@ fi
 if [ -n "${_ROTATE}" ] ; then
 
     if [ ! -x "/usr/local/bin/convert" ] ; then
-        echo "ImageMagic not installed. Aborting."
+        echo "ImageMagik not installed. Aborting."
         exit 1
     fi
 
@@ -437,6 +441,7 @@ if [ -n "${_TOKEN}" ] ; then
         minute_ones)   get_minute_ones       ;; # two
                ampm)   get_ampm              ;; # PM
           ampm_long)   get_ampm_long         ;; # Prime Meridien
+               text)   show "${_WORDS}"      ;; # TEXT
     esac
 
 elif [ -n "${_FORMAT}" ] ; then
