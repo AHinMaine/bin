@@ -245,11 +245,11 @@ def handle_keyboard_input(pinger: Pinger):
                     printrn(f"\rShowing {'only lost packets' if pinger.lost_only else 'all packets'}")
                 elif key == 'p':
                     pinger.paused = True
-                    print("\nPAUSED - Press Enter to continue: ", end='', flush=True)
+                    printrn("\nPAUSED - Press Enter to continue: ", end='', flush=True)
                     while pinger.running:
                         if reader.get_key() == '\r':
                             pinger.paused = False
-                            print("\nResuming...\r")
+                            printrn("\nResuming...\r")
                             break
                 elif key.isdigit():
                     pinger.sleep = int(key)
@@ -271,7 +271,7 @@ def parse_port(port_str: str) -> int:
         try:
             return socket.getservbyname(port_str)
         except OSError:
-            print(f"Warning: Unknown service '{port_str}', defaulting to 80")
+            printrn(f"Warning: Unknown service '{port_str}', defaulting to 80")
             return 80
 
 def printrn(*string):
@@ -294,7 +294,7 @@ def main():
     args = parser.parse_args()
 
     if args.type == 'icmp' and os.geteuid() != 0:
-        print("Error: ICMP ping requires root privileges")
+        printrn("Error: ICMP ping requires root privileges")
         sys.exit(1)
 
     # Parse ports if specified
@@ -321,7 +321,7 @@ def main():
                 if ip_address:
                     pinger.interface_ip = f"({interface}) {ip_address}"
                 else:
-                    print(f"Could not get IP address for interface: {interface}")
+                    printrn(f"Could not get IP address for interface: {interface}")
                     pinger.interface_ip = f"({interface}) NO IP"
             else:
                 pinger.interface_ip = '(IFACE UNKNOWN)'
