@@ -43,15 +43,10 @@ def parse_places(json_data):
 
     data = json.loads(json_data)
 
-    output_lines = []
-    
     adata = { 'items': [] }
 
     for entry in data['entries']:
 
-        #if len(adata['items']) >= 10:
-            #break
-            
         if 'content' in entry and 'gedcomx' in entry['content'] and 'places' in entry['content']['gedcomx']:
 
             for place in entry['content']['gedcomx']['places']:
@@ -71,10 +66,9 @@ def parse_places(json_data):
                     years = parse_year_range_string(place['temporalDescription']['formal'])
                     if years:
                         start_year, end_year = years
-                    #output_string = output_string + place['temporalDescription']['formal'] + ' ' + str(start_year) + ' - ' + str(end_year) + ' '
-                    #output_string = output_string + place['temporalDescription']['formal'] + ' '
-                    #output_string = output_string + str(start_year) + '-' + str(end_year)
 
+                # Skip the items with no span of years, not really sure what the 
+                # point of them is anyway.
                 if str(start_year) == '0000' and str(end_year) == '0000':
                     continue
                     
@@ -82,19 +76,10 @@ def parse_places(json_data):
 
                 if 'display' in place and 'fullName' in place['display']:
                     #print(place['display']['fullName'])
-                    #output_string = output_string + place['display']['fullName']
-                    #list = [adata_item_title, place['display']['fullName']]
                     adata_item_title = ' '.join([adata_item_title, place['display']['fullName']])
                     adata_item_arg = place['display']['fullName']
                     adata_item_subtitle = place['display']['fullName']
                 
-                #else:
-                #    output_string = ''
-                
-                #if len(output_string) > 0:
-                #    #print(output_string)
-                #    output_lines.append(output_string)
-
                 if len(adata_item_arg) > 0 and len(adata_item_title) > 0:
                     adata['items'].append({
                         'title': adata_item_title,
@@ -114,12 +99,13 @@ def main():
     arguments = sys.argv[1:]
 
     new_string = fix_commas(arguments)
+
+    # TODO
+    # Make this smarter
     combined_string = '+'.join(new_string)
 
 
     url = 'https://api.familysearch.org/platform/places/search'
-
-    # https://www.familysearch.org/platform/collections/places
 
     headers = {
         'Accept': 'application/x-gedcomx-atom+json'
@@ -137,21 +123,16 @@ def main():
     
         # Process the response data
         ##_## print(response.text)  # Print the raw response content
-        # Or, if the response is JSON (which it might be despite the Accept header):
-        # data = response.json()
-        # print(data)
         parsed_places = parse_places(response.text)
-        #json_string = json.dumps(parsed_places, ensure_ascii=False, sort_keys=True, indent=4)
+        
+        # Add some alfred params.  See https://www.alfredapp.com/help/workflows/inputs/script-filter/json/
+        #
+        parsed_places ['cache'] = { 'seconds': 300 }
+
         sorted_items = sorted(parsed_places['items'], key=lambda item: item['title'])
-        #sorted_items_json = json.dumps(sorted_items, ensure_ascii=False, sort_keys=True, indent=4)
-        #print(json_string)
-        #ddump('json_string', json_string)
-        #print(sorted_items_json)
-        #ddump('sorted_items_json', sorted_items_json)
         parsed_places['items'] = sorted_items
         json_string = json.dumps(parsed_places, ensure_ascii=False, sort_keys=True, indent=4)
         print(json_string)
-        #ddump('json_string2', json_string)
 
      
     except requests.exceptions.RequestException as e:
